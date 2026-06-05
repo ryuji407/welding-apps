@@ -5,9 +5,6 @@ const nextConfig: NextConfig = {
   // クロスオリジン扱いでブロックしハイドレーションが失敗するのを防ぐ。
   // これがないとスケジュールアプリ経由で開いたフォームのボタンが反応しない。
   allowedDevOrigins: ["192.168.1.235"],
-  experimental: {
-    serverBodySizeLimit: "100mb",
-  },
 };
 
 export default nextConfig;
