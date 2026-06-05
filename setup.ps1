@@ -1,90 +1,97 @@
 # ============================================================
-# welding-apps セットアップスクリプト
-# PowerShell を「管理者として実行」で開いて、
-# このファイルの中身を丸ごとコピペして実行してください
+# welding-apps setup script
+# PowerShell を「管理者として実行」で開いて実行してください
 # ============================================================
 
-function 見出し($text) {
+$appDir = "$env:USERPROFILE\welding-apps"
+
+function Show-Step($text) {
     Write-Host ""
     Write-Host "============================================" -ForegroundColor Cyan
     Write-Host "  $text" -ForegroundColor Cyan
     Write-Host "============================================" -ForegroundColor Cyan
 }
 
-function 成功($text) { Write-Host "  [OK] $text" -ForegroundColor Green }
-function 情報($text) { Write-Host "  -->  $text" -ForegroundColor Yellow }
-function 警告($text) { Write-Host "  [!]  $text" -ForegroundColor Red }
+function Show-OK($text)   { Write-Host "  [OK]  $text" -ForegroundColor Green }
+function Show-Info($text) { Write-Host "  -->   $text" -ForegroundColor Yellow }
+function Show-Warn($text) { Write-Host "  [!!]  $text" -ForegroundColor Red }
 
 
 # ============================================================
-# 1. Node.js の確認
+# 1. Node.js
 # ============================================================
-見出し "1/7  Node.js の確認"
+Show-Step "1/7  Node.js の確認"
 
 try {
     $v = node -v 2>$null
-    成功 "Node.js $v が見つかりました"
+    Show-OK "Node.js $v が見つかりました"
 } catch {
-    警告 "Node.js が見つかりません"
-    警告 "https://nodejs.org を開いて LTS 版をインストールしてから"
-    警告 "もう一度このスクリプトを実行してください"
-    Read-Host "Enterキーで終了"
+    Show-Warn "Node.js が見つかりません"
+    Show-Warn "https://nodejs.org を開いて LTS 版をインストールしてから"
+    Show-Warn "もう一度このスクリプトを実行してください"
+    Read-Host "Enter キーで終了"
     exit 1
 }
 
 
 # ============================================================
-# 2. PM2 の確認・インストール
+# 2. PM2
 # ============================================================
-見出し "2/7  PM2（アプリ管理ツール）の確認"
+Show-Step "2/7  PM2（アプリ管理ツール）の確認"
 
 $pm2ok = $null
 try { $pm2ok = Get-Command pm2 -ErrorAction Stop } catch {}
 
 if (-not $pm2ok) {
-    情報 "PM2 をインストールします（1〜2分かかります）..."
+    Show-Info "PM2 をインストールします（1〜2分かかります）..."
     npm install -g pm2
     npm install -g pm2-windows-startup
-    成功 "PM2 をインストールしました"
+    Show-OK "PM2 をインストールしました"
 } else {
-    成功 "PM2 はすでにインストールされています"
+    Show-OK "PM2 はすでにインストールされています"
 }
 
 
 # ============================================================
-# 3. コードの取得（git clone）
+# 3. コードの取得
 # ============================================================
-見出し "3/7  アプリのコードを取得"
+Show-Step "3/7  アプリのコードを取得"
 
-$appDir = "C:\Users\MARK\welding-apps"
+# system32 に残った失敗フォルダを削除
+$badDir = "C:\windows\system32\welding-apps"
+if (Test-Path $badDir) {
+    Show-Info "不要なフォルダを削除します: $badDir"
+    Remove-Item -Recurse -Force $badDir
+}
 
 if (Test-Path $appDir) {
-    情報 "すでにフォルダがあります。最新版に更新します..."
+    Show-Info "フォルダがあります。最新版に更新します..."
     Set-Location $appDir
     git pull
-    成功 "更新しました"
+    Show-OK "更新しました"
 } else {
-    Set-Location "C:\Users\MARK"
+    Set-Location $env:USERPROFILE
     git clone https://github.com/ryuji407/welding-apps.git
-    成功 "コードを取得しました"
+    Show-OK "コードを取得しました: $appDir"
 }
 
 
 # ============================================================
-# 4. 工程表のデータファイルを自動検索してコピー
+# 4. 工程表のデータをコピー
 # ============================================================
-見出し "4/7  工程表のデータを探してコピー"
+Show-Step "4/7  工程表のデータを探してコピー"
 
 $scheduleDir = "$appDir\apps\schedule"
+New-Item -ItemType Directory -Force $scheduleDir | Out-Null
 
 foreach ($file in @("data.json", "materials.json")) {
     $dest = "$scheduleDir\$file"
     if (Test-Path $dest) {
-        成功 "$file はすでにあります"
+        Show-OK "$file はすでにあります"
         continue
     }
 
-    情報 "$file を探しています..."
+    Show-Info "$file を探しています..."
     $found = Get-ChildItem C:\ -Recurse -Filter $file -ErrorAction SilentlyContinue |
         Where-Object {
             $_.FullName -notlike "*welding-apps*" -and
@@ -93,83 +100,80 @@ foreach ($file in @("data.json", "materials.json")) {
         Select-Object -First 1
 
     if ($found) {
-        Copy-Item $found.FullName $dest
-        成功 "$file をコピーしました（元の場所: $($found.FullName)）"
+        Copy-Item $found.FullName $dest -Force
+        Show-OK "$file をコピーしました (元: $($found.FullName))"
     } else {
-        警告 "$file が見つかりませんでした"
-        警告 "手動でここにコピーしてください: $dest"
+        Show-Warn "$file が見つかりませんでした"
+        Show-Warn "手動でここにコピーしてください: $dest"
     }
 }
 
 
 # ============================================================
-# 5. パッケージのインストールとビルド
+# 5. パッケージのインストール・ビルド
 # ============================================================
-見出し "5/7  パッケージのインストール・ビルド（5〜10分かかります）"
+Show-Step "5/7  パッケージのインストール・ビルド（5〜10分かかります）"
 
-情報 "工程表のパッケージをインストール中..."
+Show-Info "工程表のパッケージをインストール中..."
 Set-Location "$appDir\apps\schedule"
 npm install
-成功 "工程表のインストール完了"
+Show-OK "工程表のインストール完了"
 
-情報 "溶接マニュアルのパッケージをインストール中..."
+Show-Info "溶接マニュアルのパッケージをインストール中..."
 Set-Location "$appDir\apps\welding-manual"
 npm install
-成功 "溶接マニュアルのインストール完了"
+Show-OK "溶接マニュアルのインストール完了"
 
-情報 "溶接マニュアルをビルド中..."
+Show-Info "溶接マニュアルをビルド中..."
 npm run build
-成功 "ビルド完了"
+Show-OK "ビルド完了"
 
 
 # ============================================================
 # 6. 溶接マニュアルのデータ確認
 # ============================================================
-見出し "6/7  溶接マニュアルのデータ確認"
+Show-Step "6/7  溶接マニュアルのデータ確認"
 
 $weldingDir = "$appDir\apps\welding-manual"
 $dataOk = $true
 
 if (-not (Test-Path "$weldingDir\dev.db")) {
-    警告 "dev.db がありません"
-    警告 "旧PCから以下の場所にコピーしてください:"
-    警告 "  $weldingDir\dev.db"
+    Show-Warn "dev.db がありません"
+    Show-Warn "旧PCからここにコピーしてください:"
+    Show-Warn "  $weldingDir\dev.db"
     $dataOk = $false
 } else {
-    成功 "dev.db あり"
+    Show-OK "dev.db あり"
 }
 
 if (-not (Test-Path "$weldingDir\data")) {
-    警告 "data フォルダがありません"
-    警告 "旧PCから以下の場所にコピーしてください:"
-    警告 "  $weldingDir\data\"
+    Show-Warn "data フォルダがありません"
+    Show-Warn "旧PCからここにコピーしてください:"
+    Show-Warn "  $weldingDir\data\"
     $dataOk = $false
 } else {
-    成功 "data フォルダあり"
+    Show-OK "data フォルダあり"
 }
 
 
 # ============================================================
-# 7. PM2 でアプリを起動・自動起動の登録
+# 7. PM2 でアプリを起動
 # ============================================================
-見出し "7/7  アプリを起動"
+Show-Step "7/7  アプリを起動"
 
 Set-Location $appDir
 
-# 既存のプロセスを一旦停止
 pm2 stop all 2>$null
 pm2 delete all 2>$null
 
-# 両アプリを起動
 pm2 start ecosystem.config.cjs
-
-# Windows 起動時に自動起動するよう登録
 pm2 save
+
 try { pm2-startup install 2>$null } catch {}
 
 
 # ============================================================
-# 完了メッセージ
+# 完了
 # ============================================================
 Write-Host ""
 Write-Host "============================================" -ForegroundColor Green
@@ -180,16 +184,16 @@ Write-Host ""
 pm2 status
 
 Write-Host ""
-Write-Host "  ブラウザで開いて確認してください:" -ForegroundColor Cyan
-Write-Host "  溶接マニュアル  →  http://localhost:3000" -ForegroundColor Cyan
-Write-Host "  工程表          →  http://localhost:5173" -ForegroundColor Cyan
+Write-Host "  ブラウザで確認してください:" -ForegroundColor Cyan
+Write-Host "  溶接マニュアル  -->  http://localhost:3000" -ForegroundColor Cyan
+Write-Host "  工程表          -->  http://localhost:5173" -ForegroundColor Cyan
 Write-Host ""
 
 if (-not $dataOk) {
-    Write-Host "  [重要] 上の [!] の場所にファイルをコピーしてから:" -ForegroundColor Yellow
+    Write-Host "  [重要] [!!] と表示された場所にファイルをコピーしてから:" -ForegroundColor Yellow
     Write-Host "  pm2 restart welding-manual" -ForegroundColor Yellow
     Write-Host "  を実行してください" -ForegroundColor Yellow
     Write-Host ""
 }
 
-Read-Host "Enterキーで終了"
+Read-Host "Enter キーで終了"
