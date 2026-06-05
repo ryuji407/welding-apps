@@ -1,0 +1,220 @@
+@import "tailwindcss";
+
+html,
+body,
+#root {
+    height: 100%;
+    overflow: hidden;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    overscroll-behavior-y: none;
+    /* Prevent bounce */
+}
+
+/* Custom Scrollbar Styles - High Contrast & Forced Visibility */
+* {
+    scrollbar-width: auto;
+    /* Firefox: default (thick) */
+    scrollbar-color: #888888 #f1f1f1;
+    /* Firefox: thumb track */
+}
+
+/* Webkit (Chrome, Edge, Safari) */
+::-webkit-scrollbar {
+    width: 26px;
+    /* Extra thick for maximum accessibility */
+    height: 26px;
+    /* Extra thick for maximum accessibility */
+    display: block;
+    /* Force display */
+}
+
+::-webkit-scrollbar-track {
+    background: #f3f4f6;
+    /* Gray-100 */
+    border-radius: 0;
+    border: 1px solid #e5e7eb;
+    /* Gray-200 */
+}
+
+::-webkit-scrollbar-thumb {
+    background-color: #9ca3af;
+    /* Gray-400 */
+    border-radius: 13px;
+    border: 1px solid #f3f4f6;
+    /* Minimal padding for maximum thickness */
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background-color: #6b7280;
+    /* Gray-500 */
+}
+
+::-webkit-scrollbar-corner {
+    background: #e5e7eb;
+}
+
+/* Always show scrollbar utility class */
+.always-show-scrollbar {
+    overflow-x: scroll !important;
+    overflow-y: auto !important;
+}
+
+.always-show-scrollbar::-webkit-scrollbar {
+    display: block !important;
+}
+
+/* Sticky header for Gantt chart time axis */
+.gantt-sticky-header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: inherit;
+}
+
+/* Print Styles */
+@media print {
+    @page {
+        size: landscape;
+        margin: 10mm;
+    }
+
+    /* Hide navigation sidebar and other non-print elements */
+    aside,
+    nav,
+    header,
+    .print-hide,
+    .no-print,
+    button,
+    input[type="range"],
+    .fixed.bottom-4.right-4,
+    /* AI Assistant button usually fixed at bottom-right */
+    [role="tablist"],
+    /* Tab navigation */
+    .bg-white.border-b.border-gray-200.h-10,
+    /* Header tabs area */
+    .flex-none.px-4.py-2.bg-white.border-b.border-gray-200,
+    /* Action bar */
+    .flex.bg-gray-100.p-0.5.rounded-lg.overflow-x-auto,
+    /* Tabs inside header */
+    .h-6.w-px.bg-gray-300.mx-1,
+    /* Divider */
+    .p-1.text-gray-500.hover:text-indigo-600.hover:bg-indigo-50.rounded-lg,
+    /* Individual action buttons */
+    .flex-none.px-2.py-1.bg-white.border-b.border-gray-200.no-print {
+        display: none !important;
+    }
+
+    /* Reset main content layout */
+    main,
+    .main-content {
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 100% !important;
+        max-width: none !important;
+        position: static !important;
+        overflow: visible !important;
+        background: white !important;
+    }
+
+    /* Ensure body and html are optimized for print */
+    html,
+    body {
+        height: auto !important;
+        overflow: visible !important;
+        background: white !important;
+    }
+
+    /* Ensure background colors and colors are printed */
+    * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        box-shadow: none !important;
+        text-shadow: none !important;
+    }
+
+    /* Gantt Chart Print Optimization */
+    .gantt-container,
+    .overflow-x-auto,
+    .overflow-y-auto {
+        overflow: visible !important;
+        height: auto !important;
+    }
+
+    /* Ensure elements don't get cut off */
+    canvas,
+    img,
+    tr,
+    div {
+        break-inside: avoid;
+    }
+
+    /* Picking List Print Styles */
+    .picking-list-modal {
+        position: static !important;
+        background: none !important;
+        padding: 0 !important;
+    }
+
+    .picking-list-container {
+        max-width: none !important;
+        max-height: none !important;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+        position: static !important;
+    }
+
+    .picking-list-print-header {
+        display: block !important;
+    }
+
+    .picking-list-content {
+        overflow: visible !important;
+        padding: 0 !important;
+    }
+
+    .picking-list-table {
+        width: 100% !important;
+        font-size: 8pt !important;
+    }
+
+    .picking-list-table th,
+    .picking-list-table td {
+        padding: 2px 4px !important;
+        font-size: 8pt !important;
+    }
+
+    /* When printing picking list specifically */
+    body.printing-picking-list>*:not(.picking-list-modal) {
+        display: none !important;
+    }
+
+    body.printing-picking-list .picking-list-modal {
+        position: fixed !important;
+        inset: 0 !important;
+        z-index: 99999 !important;
+        background: white !important;
+        display: block !important;
+    }
+
+    body.printing-picking-list .picking-list-container {
+        width: 100% !important;
+        max-width: 100% !important;
+        height: auto !important;
+        max-height: none !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+    }
+
+    body.printing-picking-list .picking-list-print-header {
+        display: block !important;
+        padding: 10px !important;
+    }
+
+    body.printing-picking-list .picking-list-content {
+        padding: 10px !important;
+        overflow: visible !important;
+    }
+}

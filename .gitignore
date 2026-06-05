@@ -1,0 +1,11 @@
+node_modules/
+.next/
+dist/
+logs/
+.claude/
+
+# データファイル（手動でコピーする）
+apps/welding-manual/dev.db
+apps/welding-manual/data/
+apps/schedule/data.json
+apps/schedule/materials.json

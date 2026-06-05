@@ -1,0 +1,97 @@
+// アーク溶接ロボット 段取りマニュアル DB schema
+// 注: SQLiteを使用しているため、配列はJSON文字列として保存する
+// 将来Postgresへ移行する際は provider を "postgresql" に変更し、
+// String型のJSON配列フィールドを String[] に置換することで対応可能
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Manual {
+  id                  String   @id @default(cuid())
+  processCode         String   @unique
+  productName         String?
+  toollessToolCounts  String   @default("{}")  // JSON: { [toolId]: number }
+  robotEnvironments   String   @default("[]")  // JSON: ["左","中","右"]
+  notes               String?
+  toollessToolColor   String?
+  workVideoUrl        String?
+  layoutPhotoUrl      String?
+  wagonPhotoUrl       String?
+  notesPhotoUrl       String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  createdBy           String?
+
+  environmentBlocks   EnvironmentBlock[]
+  jigProcessSteps     JigProcessStep[]
+  mediaFiles          MediaFile[]
+  aliases             ProcessCodeAlias[]
+}
+
+model ProcessCodeAlias {
+  id          String @id @default(cuid())
+  processCode String @unique
+  manualId    String
+  manual      Manual @relation(fields: [manualId], references: [id], onDelete: Cascade)
+
+  @@index([manualId])
+}
+
+model EnvironmentBlock {
+  id          String   @id @default(cuid())
+  manualId    String
+  environment String                                // "左" | "中" | "右"
+  stepPhotos  String   @default("{}")              // JSON: {stepNumber: url}
+  manual      Manual   @relation(fields: [manualId], references: [id], onDelete: Cascade)
+  programs    Program[]
+
+  @@index([manualId])
+}
+
+model Program {
+  id            String  @id @default(cuid())
+  envBlockId    String
+  programNumber Int
+  stepNumber    Int     @default(1)
+  robots        String  @default("[]")              // JSON: ["1号機","2号機"]
+  number        String?
+  name          String?
+  photoUrl      String?
+  envBlock      EnvironmentBlock @relation(fields: [envBlockId], references: [id], onDelete: Cascade)
+
+  @@index([envBlockId])
+}
+
+model JigProcessStep {
+  id         String   @id @default(cuid())
+  manualId   String
+  stepNumber Int
+  manual     Manual   @relation(fields: [manualId], references: [id], onDelete: Cascade)
+  images     MediaFile[]
+
+  @@index([manualId])
+}
+
+// 全画像・動画ファイルを1テーブルで管理し、kindで用途を区別
+model MediaFile {
+  id         String   @id @default(cuid())
+  url        String                                  // 保存先URL or 相対パス
+  filename   String
+  mimeType   String
+  kind       String                                  // "layout" | "wagon" | "jig" | "video"
+  manualId   String?
+  jigStepId  String?
+  createdAt  DateTime @default(now())
+
+  manual     Manual?         @relation(fields: [manualId], references: [id], onDelete: Cascade)
+  jigStep    JigProcessStep? @relation(fields: [jigStepId], references: [id], onDelete: Cascade)
+
+  @@index([manualId])
+  @@index([jigStepId])
+}
