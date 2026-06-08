@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Menu, X, Lock, Unlock } from 'lucide-react';
+import { Menu, X, Lock, Unlock, BookOpen } from 'lucide-react';
 import { useAdminMode } from '../context/AdminModeContext';
 import { useSidebar } from '../context/SidebarContext';
 import { AdminLoginModal } from './AdminLoginModal';
@@ -92,6 +92,15 @@ export function Layout({ children, onSignOut }: LayoutProps) {
                                 <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
                                 溶接ライン工程
                             </div>
+                            <a
+                                href="http://192.168.1.249:3000"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="w-full px-4 py-2 rounded-lg font-medium flex items-center gap-3 text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                            >
+                                <BookOpen size={16} />
+                                溶接マニュアル
+                            </a>
                         </div>
                     </div>
                 </nav>

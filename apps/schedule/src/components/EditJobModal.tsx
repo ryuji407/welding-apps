@@ -188,7 +188,7 @@ export function EditJobModal({ job, isOpen, onClose, onSave, isAdmin = false, is
                                 {/* 右：マニュアルボタン */}
                                 {editedJob.operationCode ? (
                                     <a
-                                        href={`http://192.168.1.235:3000/manual/${editedJob.operationCode.includes(':') ? editedJob.operationCode.split(':').slice(1).join(':') : editedJob.operationCode}`}
+                                        href={`http://192.168.1.249:3000/manual/${editedJob.operationCode.includes(':') ? editedJob.operationCode.split(':').slice(1).join(':') : editedJob.operationCode}`}
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:border-amber-400 transition-all font-semibold"
