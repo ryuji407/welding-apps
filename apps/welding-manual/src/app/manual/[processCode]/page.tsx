@@ -2,6 +2,7 @@ import Link from "next/link";
 import MediaUploader from "@/components/MediaUploader";
 import VideoUploader from "@/components/VideoUploader";
 import EditButton from "@/components/EditButton";
+import DeleteButton from "@/components/DeleteButton";
 import { getManualByCode, parseJsonArray } from "@/lib/manual";
 import { parseJsonRecord } from "@/lib/constants";
 import { TOOLLESS_TOOL_CATEGORIES } from "@/lib/toollessTools";
@@ -96,7 +97,10 @@ export default async function ManualViewPage({
             <p className="text-2xl font-bold tracking-wide">
               {[master.itemName, master.processName].filter(Boolean).join("　")}
             </p>
-            <EditButton processCode={manual.processCode} />
+            <div className="flex items-center gap-2">
+              <EditButton processCode={manual.processCode} />
+              <DeleteButton processCode={manual.processCode} />
+            </div>
           </div>
         </div>
       )}

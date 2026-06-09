@@ -39,12 +39,26 @@ const ALLOWED_KINDS = new Set(["layout", "wagon", "notes", "jig", "program", "vi
 const MAX_IMAGE_BYTES = 25 * 1024 * 1024;  // 25MB
 const MAX_VIDEO_BYTES = 100 * 1024 * 1024; // 100MB
 
+/** kind（英語）→ 日本語フォルダ名のマッピング */
+const KIND_FOLDER: Record<string, string> = {
+  layout:  "全体レイアウト",
+  wagon:   "ワゴン積載",
+  jig:     "治具工程",
+  video:   "動画",
+  program: "プログラム",
+  notes:   "注意点",
+};
+
+/** ルートフォルダ名 */
+const BASE_FOLDER = "マニュアル";
+
 /**
  * 保存先フォルダを決定する。
- * 全ファイルを uploads/{processCode}/{kind}/ 以下にまとめることで
+ * 全ファイルを マニュアル/{processCode}/{日本語kind}/ 以下にまとめることで
  * アプリなしでも工程コード別に参照でき、移行しやすい構造にする。
+ * jig は 治具工程/工程{N}/ のようにステップごとにサブフォルダを分ける。
  *
- * フォールバック: processCode が特定できない場合は uploads/{manualId}/{kind}/
+ * フォールバック: processCode が特定できない場合は マニュアル/{manualId}/{kind}/
  */
 async function resolveUploadDir(
   kind: string,
@@ -53,25 +67,27 @@ async function resolveUploadDir(
   jigStepId: string | null,
 ): Promise<{ dir: string; urlBase: string }> {
   const dataDir = getDataDir();
+  const kindFolder = KIND_FOLDER[kind] ?? kind;
 
   // 1. processCode が直接渡された場合（新規作成中も含む）
   if (processCode) {
     const safeCode = processCode.replace(/[^a-zA-Z0-9_\-]/g, "_");
-    const dir = path.join(dataDir, "uploads", safeCode, kind);
-    return { dir, urlBase: `uploads/${safeCode}/${kind}` };
+    const dir = path.join(dataDir, BASE_FOLDER, safeCode, kindFolder);
+    return { dir, urlBase: `${BASE_FOLDER}/${safeCode}/${kindFolder}` };
   }
 
-  // 2. jigStepId のみの場合 → DB から processCode を取得
+  // 2. jigStepId のみの場合 → DB から processCode・stepNumber を取得
   if (jigStepId) {
     const step = await prisma.jigProcessStep.findUnique({
       where: { id: jigStepId },
-      select: { manual: { select: { processCode: true } } },
+      select: { stepNumber: true, manual: { select: { processCode: true } } },
     });
     const code = step?.manual?.processCode;
     if (code) {
       const safeCode = code.replace(/[^a-zA-Z0-9_\-]/g, "_");
-      const dir = path.join(dataDir, "uploads", safeCode, "jig");
-      return { dir, urlBase: `uploads/${safeCode}/jig` };
+      const stepFolder = `工程${step!.stepNumber}`;
+      const dir = path.join(dataDir, BASE_FOLDER, safeCode, "治具工程", stepFolder);
+      return { dir, urlBase: `${BASE_FOLDER}/${safeCode}/治具工程/${stepFolder}` };
     }
   }
 
@@ -84,12 +100,12 @@ async function resolveUploadDir(
     const code = manual?.processCode;
     if (code) {
       const safeCode = code.replace(/[^a-zA-Z0-9_\-]/g, "_");
-      const dir = path.join(dataDir, "uploads", safeCode, kind);
-      return { dir, urlBase: `uploads/${safeCode}/${kind}` };
+      const dir = path.join(dataDir, BASE_FOLDER, safeCode, kindFolder);
+      return { dir, urlBase: `${BASE_FOLDER}/${safeCode}/${kindFolder}` };
     }
     // フォールバック: processCode 不明時は manualId フォルダ
-    const dir = path.join(dataDir, "uploads", manualId, kind);
-    return { dir, urlBase: `uploads/${manualId}/${kind}` };
+    const dir = path.join(dataDir, BASE_FOLDER, manualId, kindFolder);
+    return { dir, urlBase: `${BASE_FOLDER}/${manualId}/${kindFolder}` };
   }
 
   throw new Error("processCode / manualId / jigStepId のいずれかが必要です");

@@ -133,5 +133,4 @@ export async function saveManualAndRedirect(input: ManualInput) {
 export async function deleteManual(processCode: string) {
   await prisma.manual.delete({ where: { processCode } });
   revalidatePath("/");
-  redirect("/");
 }

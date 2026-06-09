@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { listManuals } from "@/lib/manual";
+import DeleteButtonRow from "@/components/DeleteButtonRow";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +38,7 @@ export default async function HomePage({
                     <th className="px-4 py-2">工程コード</th>
                     <th className="px-4 py-2">製品名</th>
                     <th className="px-4 py-2">更新日時</th>
+                    <th className="px-4 py-2"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -53,6 +55,9 @@ export default async function HomePage({
                       <td className="px-4 py-2">{m.productName ?? "—"}</td>
                       <td className="px-4 py-2 text-slate-500">
                         {m.updatedAt.toLocaleString("ja-JP")}
+                      </td>
+                      <td className="px-4 py-2 text-right">
+                        <DeleteButtonRow processCode={m.processCode} />
                       </td>
                     </tr>
                   ))}
