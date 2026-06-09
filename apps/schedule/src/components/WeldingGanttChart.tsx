@@ -2011,7 +2011,7 @@ export function WeldingGanttChart({ jobs, onJobUpdate, onJobClick, onJobDelete, 
                                         <span className="text-[10px] font-normal text-gray-500 mt-0.5">{grandTotalLabel}</span>
                                     )}
                                 </div>
-                                <div className="flex-1 flex gantt-grid-container">
+                                <div className="flex flex-none gantt-grid-container">
                                     {firstRange.timeSlots.map((time, index) => {
                                         const nextTime = firstRange.timeSlots[index + 1];
                                         const is1720 = nextTime === '17:20';
@@ -2019,8 +2019,8 @@ export function WeldingGanttChart({ jobs, onJobUpdate, onJobClick, onJobDelete, 
                                         return (
                                             <div
                                                 key={index}
-                                                className={`flex-1 p-2 text-left text-sm font-bold ${time === '17:20' ? 'text-red-600' : 'text-gray-800'} ${is1720 ? 'border-r-4 border-red-500 z-5' : is1730 ? 'border-r-0' : 'border-r-2 border-gray-300'} pl-0.5`}
-                                                style={{ minWidth: `${slotWidthGlobal}px` }}
+                                                className={`flex-none p-2 text-left text-sm font-bold ${time === '17:20' ? 'text-red-600' : 'text-gray-800'} ${is1720 ? 'border-r-4 border-red-500 z-5' : is1730 ? 'border-r-0' : 'border-r-2 border-gray-300'} pl-0.5`}
+                                                style={{ width: `${slotWidthGlobal}px` }}
                                             >
                                                 {time}
                                             </div>
