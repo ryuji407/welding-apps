@@ -47,6 +47,7 @@ export interface Job {
     textColor?: string; // テキスト色 (緑色などに個別設定)
     changeInstruction?: string; // 変更指示 (追加/削除など)
     allEquipmentColumns?: string[]; // 複数設備対応（パース時のみ使用）
+    isPickingListOnly?: boolean; // ピッキングリストのみ表示（ガントチャートに表示しない）
 
     // 工程外項目（生産計画外の対応・遅れ・事務作業など）
     isNonProduction?: boolean;

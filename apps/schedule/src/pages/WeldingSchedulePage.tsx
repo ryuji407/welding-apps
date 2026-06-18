@@ -54,6 +54,14 @@ export function WeldingSchedulePage({ onFileNameChange, viewMode: initialViewMod
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [isArchivesOpen, setIsArchivesOpen] = useState(false);
 
+    // フレクシェCSV: 日付選択モーダル用
+    const [flexcheImportData, setFlexcheImportData] = useState<{
+        jobs: Job[];
+        allDates: string[];
+        fileName: string;
+    } | null>(null);
+    const [flexcheSelectedDates, setFlexcheSelectedDates] = useState<Set<string>>(new Set());
+
     // State for Global Machine Filter
     const [selectedMachine, setSelectedMachine] = useState<string | 'all'>('all');
 
@@ -921,6 +929,38 @@ export function WeldingSchedulePage({ onFileNameChange, viewMode: initialViewMod
         setEditingJob(newJob);
     };
 
+    // ジョブをFirestoreへ書き込む共通処理
+    const doImport = useCallback(async (newJobs: Job[], displayDate: string) => {
+        if (newJobs.length === 0) {
+            alert('読み込み対象のジョブがありませんでした。');
+            return;
+        }
+        const optimizedJobs = optimizeJobsList(newJobs, lanes, laneStartTimes);
+        const newScheduleId = await addSchedule(displayDate, displayDate);
+        if (newScheduleId) {
+            const { writeBatch, doc: firestoreDoc } = await import('firebase/firestore');
+            const CHUNK_SIZE = 400;
+            for (let i = 0; i < optimizedJobs.length; i += CHUNK_SIZE) {
+                const chunk = optimizedJobs.slice(i, i + CHUNK_SIZE);
+                const batch = writeBatch(db);
+                chunk.forEach(job => {
+                    const { id, ...jobData } = job;
+                    const sanitizedData = Object.fromEntries(
+                        Object.entries(jobData).filter(([_, v]) => v !== undefined)
+                    );
+                    const newJobRef = firestoreDoc(collection(db, 'welding_schedules', newScheduleId, 'jobs'));
+                    batch.set(newJobRef, {
+                        ...sanitizedData,
+                        originalDate: displayDate,
+                        createdAt: new Date().toISOString()
+                    });
+                });
+                await batch.commit();
+            }
+            setActiveScheduleId(newScheduleId);
+        }
+    }, [lanes, laneStartTimes, addSchedule]);
+
     const handleFileUpload = async (content: string | File, fileType: 'csv' | 'excel', uploadedFileName: string) => {
         try {
             let newJobs: Job[] = [];
@@ -929,6 +969,13 @@ export function WeldingSchedulePage({ onFileNameChange, viewMode: initialViewMod
                 const result = parseCSV(content as string, lanes, laneSkills, false, laneStartTimes, fixedJobs, laneBreakTimes, masterSkills, [], equipmentColors, equipmentWorkerPriority);
                 newJobs = result.jobs;
                 date = result.date || '';
+
+                // フレクシェCSVの場合: 日付選択モーダルを表示
+                if (result.isFlexche && result.allDates && result.allDates.length > 0) {
+                    setFlexcheImportData({ jobs: newJobs, allDates: result.allDates, fileName: uploadedFileName });
+                    setFlexcheSelectedDates(new Set(result.allDates.slice(0, 1)));
+                    return;
+                }
             } else {
                 const result = await parseExcel(content as File, lanes, laneSkills, false, laneStartTimes, fixedJobs, laneBreakTimes, masterSkills, [], equipmentColors, equipmentWorkerPriority);
                 newJobs = result.jobs;
@@ -938,45 +985,33 @@ export function WeldingSchedulePage({ onFileNameChange, viewMode: initialViewMod
                 alert('ファイルからジョブデータを読み込めませんでした。ファイル形式やデータ内容（完了済み・作業時間など）を確認してください。');
                 return;
             }
-
             const displayDate = date || uploadedFileName.replace(/\.(csv|xlsx|xls)$/i, '') || '新規スケジュール';
-            const optimizedJobs = optimizeJobsList(newJobs, lanes, laneStartTimes);
-
-            const newScheduleId = await addSchedule(displayDate, displayDate);
-
-            if (newScheduleId) {
-                // writeBatch を用いて最大500件ずつチャンク書き込みを行う
-                const { writeBatch, doc: firestoreDoc } = await import('firebase/firestore');
-
-                const CHUNK_SIZE = 400; // Firestoreの制限は500件ですが、余裕を持って400件とします
-                for (let i = 0; i < optimizedJobs.length; i += CHUNK_SIZE) {
-                    const chunk = optimizedJobs.slice(i, i + CHUNK_SIZE);
-                    const batch = writeBatch(db);
-
-                    chunk.forEach(job => {
-                        const { id, ...jobData } = job;
-                        // Sanitize: Remove undefined fields (Firestore doesn't accept undefined)
-                        const sanitizedData = Object.fromEntries(
-                            Object.entries(jobData).filter(([_, v]) => v !== undefined)
-                        );
-
-                        // IDを自動生成するドキュメント参照を作成
-                        const newJobRef = firestoreDoc(collection(db, 'welding_schedules', newScheduleId, 'jobs'));
-                        batch.set(newJobRef, {
-                            ...sanitizedData,
-                            originalDate: displayDate,
-                            createdAt: new Date().toISOString()
-                        });
-                    });
-
-                    await batch.commit();
-                }
-
-                setActiveScheduleId(newScheduleId);
-            }
+            await doImport(newJobs, displayDate);
         } catch (error: any) {
             console.error('File Parse Error:', error);
             alert(`ファイルの解析中にエラーが発生しました: ${error.message || '不明なエラー'}`);
+        }
+    };
+
+    // フレクシェCSV: 日付確定後のインポート（日付ごとに別スケジュールとして登録）
+    const handleFlexcheConfirm = async () => {
+        if (!flexcheImportData) return;
+        if (flexcheSelectedDates.size === 0) {
+            alert('読み込む日付を1つ以上選択してください。');
+            return;
+        }
+        const sortedSelected = [...flexcheSelectedDates].sort();
+        setFlexcheImportData(null);
+        try {
+            for (const date of sortedSelected) {
+                const jobsForDate = flexcheImportData.jobs.filter(job => job.originalDate === date);
+                if (jobsForDate.length > 0) {
+                    await doImport(jobsForDate, date);
+                }
+            }
+        } catch (error: any) {
+            console.error('Flexche Import Error:', error);
+            alert(`インポート中にエラーが発生しました: ${error.message || '不明なエラー'}`);
         }
     };
 
@@ -1286,7 +1321,7 @@ export function WeldingSchedulePage({ onFileNameChange, viewMode: initialViewMod
                     <div className={`pl-2 ${isCollapsed ? 'md:pl-2' : 'pl-2'} pr-2 flex-1 flex flex-col welding-page-container ${viewMode === 'gantt' ? 'h-full' : 'max-h-[50vh] border-b border-gray-200 print:max-h-none print:h-auto print:border-none'}`}>
                         <div ref={ganttContainerRef} className="flex-1 min-h-0 gantt-scroll-container">
                             <WeldingGanttChart
-                                jobs={jobs}
+                                jobs={jobs.filter(j => !j.isPickingListOnly)}
                                 visibleMachines={getVisibleMachines()}
                                 onJobUpdate={handleJobUpdate}
                                 onJobClick={handleJobClick}
@@ -1447,6 +1482,50 @@ export function WeldingSchedulePage({ onFileNameChange, viewMode: initialViewMod
                 showProcessColors={false}
                 showEquipmentColors={true}
             />
+
+            {/* フレクシェCSV: 日付選択モーダル */}
+            {flexcheImportData && (
+                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[10000]">
+                    <div className="bg-white rounded-xl p-6 w-80 shadow-2xl">
+                        <h3 className="text-base font-bold text-gray-800 mb-3">読み込む日付を選択</h3>
+                        <div className="space-y-2 mb-5 max-h-64 overflow-y-auto">
+                            {flexcheImportData.allDates.map(date => (
+                                <label key={date} className="flex items-center gap-3 cursor-pointer p-2 rounded-lg hover:bg-gray-50">
+                                    <input
+                                        type="checkbox"
+                                        checked={flexcheSelectedDates.has(date)}
+                                        onChange={e => {
+                                            setFlexcheSelectedDates(prev => {
+                                                const next = new Set(prev);
+                                                if (e.target.checked) next.add(date);
+                                                else next.delete(date);
+                                                return next;
+                                            });
+                                        }}
+                                        className="w-4 h-4 accent-indigo-600"
+                                    />
+                                    <span className="text-sm text-gray-700">{date}</span>
+                                </label>
+                            ))}
+                        </div>
+                        <div className="flex gap-2 justify-end">
+                            <button
+                                onClick={() => setFlexcheImportData(null)}
+                                className="px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                            >
+                                キャンセル
+                            </button>
+                            <button
+                                onClick={handleFlexcheConfirm}
+                                disabled={flexcheSelectedDates.size === 0}
+                                className="px-4 py-1.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                                読み込む ({flexcheSelectedDates.size}日)
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {
                 archiveConfirm.show && (

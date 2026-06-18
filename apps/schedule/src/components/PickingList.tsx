@@ -43,7 +43,7 @@ export function PickingList({ jobs, scheduleDate, isOpen, onClose, isWeldingLine
     // Sort jobs
     const sortedJobs = useMemo(() => {
         const sortableJobs = jobs.filter(job =>
-            job.changeInstruction !== '追加' && !fixedJobNames.includes(job.name) && !job.isNonProduction
+            job.changeInstruction !== '追加' && !fixedJobNames.includes(job.name) && !job.isNonProduction && !!job.operationCode
         );
         const { key, direction } = sortConfig;
 

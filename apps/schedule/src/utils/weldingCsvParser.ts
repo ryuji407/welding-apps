@@ -653,6 +653,22 @@ const assignJobs = (
 
 const DEFAULT_BREAKS_RECORD: Record<string, BreakTime[]> = {};
 
+// フレクシェCSV S4設備列の定義（列インデックス → 設備名）
+const FLEXCHE_S4_EQUIPMENT_COLS: { col: number; name: string }[] = [
+    { col: 32, name: 'ロボット1台' },
+    { col: 33, name: 'ロボット2台' },
+    { col: 34, name: 'TIGロボット' },
+    { col: 35, name: 'FLロボット' },
+    { col: 36, name: '半自動' },
+    { col: 37, name: 'TIG' },
+    { col: 38, name: '簡易研磨' },
+    { col: 39, name: '高難易度' },
+    { col: 40, name: 'スポット機' },
+    { col: 41, name: 'プレス機' },
+    { col: 42, name: 'ボール盤' },
+    { col: 43, name: 'タップ機' },
+];
+
 export const parseCSV = (
     csvContent: string,
     activeLanes: string[],
@@ -665,7 +681,7 @@ export const parseCSV = (
     excludedLanes: string[] = [],
     equipmentColors: Record<string, string> = {},
     equipmentWorkerPriority: Record<string, string[]> = {}
-): { jobs: Job[], date?: string } => {
+): { jobs: Job[], date?: string, isFlexche?: boolean, allDates?: string[] } => {
     // Ensure lanes are populated
     console.log('[parseCSV] Starting with lanes:', activeLanes, 'breakTimes provided:', !!breakTimes);
     const cleanContent = csvContent.replace(/^\uFEFF/, '');
@@ -674,14 +690,138 @@ export const parseCSV = (
     if (lines.length === 0) return { jobs: [] };
 
     const allJobs: Job[] = []; // Renamed to allJobs to avoid conflict with finalJobs
+    const s6PickingJobs: Job[] = []; // S6ピッキングリスト専用ジョブ（assignJobs を通さない）
     let extractedDate: string | undefined;
     const foundDates: Record<string, number> = {};
 
     const firstLine = lines[0];
-    const isHeaderless = /^\d{4}\/\d{1,2}\/\d{1,2}/.test(parseCSVLine(firstLine)[0]);
-    console.log('Format detected:', isHeaderless ? 'Headerless (New)' : 'Headered (Legacy)');
+    const firstLineValues = parseCSVLine(firstLine);
+    const isHeaderless = /^\d{4}\/\d{1,2}\/\d{1,2}/.test(firstLineValues[0]);
+    // フレクシェCSV検出: 3列目が "SHOP" かつ "S4-ロボット1台" 列を持つ
+    const isFlexche = !isHeaderless &&
+        firstLineValues[2]?.trim() === 'SHOP' &&
+        firstLineValues.some(v => v.includes('S4-ロボット1台'));
+    console.log('Format detected:', isFlexche ? 'Flexche' : isHeaderless ? 'Headerless (New)' : 'Headered (Legacy)');
 
-    if (isHeaderless) {
+    if (isFlexche) {
+        // ── フレクシェCSVパース ──────────────────────────────────────────
+        lines.slice(1).forEach((line, i) => {
+            const values = parseCSVLine(line);
+            const shop = values[2]?.trim();
+
+            const workDateRaw = values[1]?.trim() || '';
+            const dateMatch = workDateRaw.match(/^(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})/);
+            const dateFormatted = dateMatch
+                ? `${dateMatch[1]}/${dateMatch[2].padStart(2, '0')}/${dateMatch[3].padStart(2, '0')}`
+                : '';
+
+            if (shop === 'S4') {
+                // ── S4溶接行 ──────────────────────────────────────────────
+                if (dateFormatted) {
+                    foundDates[dateFormatted] = (foundDates[dateFormatted] || 0) + 1;
+                }
+
+                const job: any = {};
+                job.id = `flexche-${Date.now()}-${i}`;
+                job.progress = 0;
+                job.isCompleted = false;
+                job.startTime = '00:00';
+                job.endTime = '00:00';
+
+                job.name = values[8]?.trim() || values[44]?.trim() || values[4]?.trim() || '不明な工程';
+                job.operationCode = values[0]?.trim() || '';
+                job.finishedProductNumber = values[4]?.trim() || '';
+                job.componentOfficialName = values[8]?.trim() || '';
+                job.componentNumber = values[7]?.trim() || '';
+                job.prototypeNumber = values[5]?.trim() || '';
+                job.dailyQuantity = cleanQuantity(values[9] || '');
+                job.totalQuantity = cleanQuantity(values[10] || '');
+                job.workerCount = values[12]?.trim() || '1';
+                job.setupTime = values[13]?.trim() || '0';
+                job.productionTime = values[14]?.trim() || '0';
+                job.shipDate = values[15]?.trim() || '';
+                job.note = values[17]?.trim() || '';
+                job.customer = values[18]?.trim() || '';
+                job.nextProcessShop = values[19]?.trim() || '';
+                job.nextProcessSchedule = values[20]?.trim() || '';
+                job.paintColor = cleanPaintColor(values[46] || values[21] || '');
+                job.pipeMaterialName = values[24]?.trim() || '';
+                job.originalDate = dateFormatted;
+                job.jigLocation = values[30]?.trim() || '';
+                job.jigAddress = values[31]?.trim() || '';
+
+                // S4設備列（32〜43）から設備を検出
+                const detectedEquipment: string[] = [];
+                for (const eq of FLEXCHE_S4_EQUIPMENT_COLS) {
+                    const cellVal = values[eq.col]?.trim();
+                    if (cellVal && cellVal !== '0' && cellVal.toLowerCase() !== 'false') {
+                        detectedEquipment.push(eq.name);
+                    }
+                }
+
+                job.equipmentColumn = detectedEquipment[0] || '';
+                job.allEquipmentColumns = detectedEquipment.length > 0 ? detectedEquipment : undefined;
+                job.color = equipmentColors[job.equipmentColumn] || WELDING_EQUIPMENT_COLORS[job.equipmentColumn] || equipmentColors['その他'] || DEFAULT_WELDING_COLOR;
+                job.machine = 'Unassigned';
+
+                const setupSec = parseInt((job.setupTime || '0').replace(/,/g, ''), 10) || 0;
+                const prodSec = parseInt((job.productionTime || '0').replace(/,/g, ''), 10) || 0;
+                job.durationMinutes = Math.ceil((setupSec + prodSec) / 60);
+
+                if (job.durationMinutes > 0) {
+                    const count = parseInt(String(job.workerCount || '1'), 10) || 1;
+                    if (count === 2) {
+                        allJobs.push({ ...job, id: `${job.id}-1` } as Job, { ...job, id: `${job.id}-2` } as Job);
+                    } else {
+                        allJobs.push(job as Job);
+                    }
+                }
+
+            } else if (shop === 'S6') {
+                // ── S6ピッキングリスト行 ──────────────────────────────────
+                const jigAddress = values[31]?.trim() || '';
+                // 治具番地が空・「ー」・「-」の場合はスキップ
+                if (!jigAddress || jigAddress === 'ー' || jigAddress === '-') return;
+
+                if (dateFormatted) {
+                    foundDates[dateFormatted] = (foundDates[dateFormatted] || 0) + 1;
+                }
+
+                const operationCode = values[0]?.trim() || '';
+                if (!operationCode) return;
+
+                const s6Job: Job = {
+                    id: `flexche-s6-${Date.now()}-${i}`,
+                    progress: 0,
+                    isCompleted: false,
+                    startTime: '00:00',
+                    endTime: '00:00',
+                    machine: 'S6',
+                    isPickingListOnly: true,
+                    operationCode,
+                    name: values[8]?.trim() || values[4]?.trim() || '不明な工程',
+                    finishedProductNumber: values[4]?.trim() || '',
+                    componentOfficialName: values[8]?.trim() || '',
+                    componentNumber: values[7]?.trim() || '',
+                    prototypeNumber: values[5]?.trim() || '',
+                    dailyQuantity: cleanQuantity(values[9] || ''),
+                    totalQuantity: cleanQuantity(values[10] || ''),
+                    workerCount: values[12]?.trim() || '1',
+                    setupTime: values[13]?.trim() || '0',
+                    productionTime: values[14]?.trim() || '0',
+                    shipDate: values[15]?.trim() || '',
+                    note: values[17]?.trim() || '',
+                    customer: values[18]?.trim() || '',
+                    jigLocation: values[30]?.trim() || '',
+                    jigAddress,
+                    originalDate: dateFormatted,
+                    durationMinutes: 0,
+                    color: DEFAULT_WELDING_COLOR,
+                };
+                s6PickingJobs.push(s6Job);
+            }
+        });
+    } else if (isHeaderless) {
         const firstDate = parseCSVLine(firstLine)[0].trim();
         if (firstDate) {
             const dateMatch = firstDate.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})/);
@@ -1021,8 +1161,15 @@ export const parseCSV = (
         }
     });
 
-    console.log('parseCSV completed. Jobs found:', finalJobs.length, 'Date identified:', mostFrequentDate);
-    return { jobs: finalJobs, date: mostFrequentDate };
+    // S6ピッキングリスト専用ジョブを結合（assignJobs を通していないので末尾に追加）
+    const combinedJobs = isFlexche ? [...finalJobs, ...s6PickingJobs] : finalJobs;
+
+    const allDates = Object.keys(foundDates).sort();
+    console.log('parseCSV completed. Jobs found:', combinedJobs.length, '(S6 picking:', s6PickingJobs.length, ') Date identified:', mostFrequentDate, 'isFlexche:', isFlexche);
+    if (isFlexche) {
+        return { jobs: combinedJobs, date: mostFrequentDate, isFlexche: true, allDates };
+    }
+    return { jobs: combinedJobs, date: mostFrequentDate };
 };
 
 export const parseExcel = async (
