@@ -8,6 +8,8 @@ import { tmpdir } from "node:os";
 import { prisma, getDataDir } from "@/lib/db";
 import sharp from "sharp";
 import ffmpeg from "fluent-ffmpeg";
+import ffmpegStatic from "ffmpeg-static";
+if (ffmpegStatic) ffmpeg.setFfmpegPath(ffmpegStatic);
 
 const IMAGE_MAX_PX = 1920;  // 最長辺の上限（px）
 const IMAGE_QUALITY = 80;   // JPEG品質
