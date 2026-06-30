@@ -3,6 +3,7 @@
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { deleteMedia } from "@/app/actions/media";
+import ImageEditModal from "@/components/ImageEditModal";
 
 type Media = { id: string; url: string; filename: string };
 
@@ -29,6 +30,7 @@ export default function MediaUploader({
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [editingImage, setEditingImage] = useState<{ id: string; url: string } | null>(null);
 
   async function onChange(e: React.ChangeEvent<HTMLInputElement>) {
     const files = e.target.files;
@@ -73,14 +75,29 @@ export default function MediaUploader({
         ) : (
           <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
             {images.map((img) => (
-              <div key={img.id} className="aspect-video overflow-hidden rounded border border-slate-200">
+              <div key={img.id} className="group relative aspect-video overflow-hidden rounded border border-slate-200">
                 <a href={img.url} target="_blank" rel="noopener noreferrer" className="block h-full">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={img.url} alt={img.filename} className="h-full w-full object-cover" />
                 </a>
+                <button
+                  type="button"
+                  onClick={() => setEditingImage({ id: img.id, url: img.url })}
+                  className="absolute left-1 top-1 rounded bg-black/60 px-2 py-0.5 text-xs text-white opacity-0 group-hover:opacity-100"
+                >
+                  編集
+                </button>
               </div>
             ))}
           </div>
+        )}
+        {editingImage && (
+          <ImageEditModal
+            mediaId={editingImage.id}
+            imageUrl={editingImage.url}
+            onClose={() => setEditingImage(null)}
+            onSaved={() => { setEditingImage(null); router.refresh(); }}
+          />
         )}
       </div>
     );
@@ -121,6 +138,13 @@ export default function MediaUploader({
                     className="h-full w-full object-cover"
                   />
                 </a>
+                <button
+                  type="button"
+                  onClick={() => setEditingImage({ id: img.id, url: img.url })}
+                  className="absolute left-1 top-1 rounded bg-black/60 px-2 py-0.5 text-xs text-white opacity-0 group-hover:opacity-100"
+                >
+                  編集
+                </button>
                 <button
                   type="button"
                   onClick={() => onDelete(img.id)}
@@ -165,6 +189,14 @@ export default function MediaUploader({
       )}
       {uploading && images.length === 0 && <span className="text-xs text-slate-500">アップロード中...</span>}
       {error && <p className="text-xs text-red-600">{error}</p>}
+      {editingImage && (
+        <ImageEditModal
+          mediaId={editingImage.id}
+          imageUrl={editingImage.url}
+          onClose={() => setEditingImage(null)}
+          onSaved={() => { setEditingImage(null); router.refresh(); }}
+        />
+      )}
     </div>
   );
 }

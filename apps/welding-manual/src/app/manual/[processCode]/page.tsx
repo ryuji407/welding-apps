@@ -75,8 +75,19 @@ export default async function ManualViewPage({
   const hasAnyToolCount = TOOLLESS_TOOL_CATEGORIES.some((cat) =>
     cat.tools.some((t) => Number(toollessCounts[t.id]) > 0),
   );
-  const layoutImages = manual.mediaFiles.filter((m) => m.kind === "layout");
-  const wagonImages = manual.mediaFiles.filter((m) => m.kind === "wagon");
+  // mediaFilesに加え、フォームから保存された単体URLもマージ（重複除外）
+  const layoutImages = [
+    ...manual.mediaFiles.filter((m) => m.kind === "layout"),
+    ...(manual.layoutPhotoUrl && !manual.mediaFiles.some((m) => m.url === manual.layoutPhotoUrl)
+      ? [{ id: "__form_layout", url: manual.layoutPhotoUrl, filename: "全体レイアウト" }]
+      : []),
+  ];
+  const wagonImages = [
+    ...manual.mediaFiles.filter((m) => m.kind === "wagon"),
+    ...(manual.wagonPhotoUrl && !manual.mediaFiles.some((m) => m.url === manual.wagonPhotoUrl)
+      ? [{ id: "__form_wagon", url: manual.wagonPhotoUrl, filename: "ワゴン積載" }]
+      : []),
+  ];
   const videoFiles = manual.mediaFiles.filter((m) => m.kind === "video");
   const jigByStep = new Map<number, typeof manual.jigProcessSteps[number]>();
   for (const step of manual.jigProcessSteps) {
@@ -214,6 +225,10 @@ export default async function ManualViewPage({
                 byStep.get(p.stepNumber)!.push(p);
               }
               const sortedSteps = [...byStep.keys()].sort((a, b) => a - b);
+              // フォームから保存された工程写真（environmentBlock.stepPhotos JSON）
+              const blockStepPhotos: Record<string, string> = (() => {
+                try { const v = JSON.parse(block.stepPhotos); return v && typeof v === "object" ? v : {}; } catch { return {}; }
+              })();
               const missingItems = new Set<string>();
               sortedSteps.forEach((stepNum) => {
                 const progs = byStep.get(stepNum)!;
@@ -224,7 +239,8 @@ export default async function ManualViewPage({
                 })) missingItems.add("号機");
                 if (progs.some(p => !p.number)) missingItems.add("プログラム番号");
                 if (progs.some(p => !p.name)) missingItems.add("プログラム名称");
-                if (!(jigStep && jigStep.images.length > 0)) missingItems.add("写真");
+                const hasPhoto = (jigStep && jigStep.images.length > 0) || !!blockStepPhotos[String(stepNum)];
+                if (!hasPhoto) missingItems.add("写真");
               });
               const hasMissing = missingItems.size > 0;
               const missingText = Array.from(missingItems).join("、");
@@ -247,10 +263,12 @@ export default async function ManualViewPage({
                       sortedSteps.map((stepNum) => {
                         const jigStep = jigByStep.get(stepNum);
                         const progs = byStep.get(stepNum)!;
+                        const stepPhotoUrl = blockStepPhotos[String(stepNum)];
+                        const hasPhoto = (jigStep && jigStep.images.length > 0) || !!stepPhotoUrl;
                         const missingItems: string[] = [];
                         if (progs.some(p => !p.number)) missingItems.push("プログラム番号");
                         if (progs.some(p => !p.name))   missingItems.push("プログラム名称");
-                        if (!(jigStep && jigStep.images.length > 0)) missingItems.push("写真");
+                        if (!hasPhoto) missingItems.push("写真");
                         return (
                           <div key={stepNum} className="rounded border border-slate-100 bg-slate-50 p-3">
                             <div className="mb-2 text-xs font-bold text-slate-500">工程{stepNum}</div>
@@ -270,6 +288,13 @@ export default async function ManualViewPage({
                                 );
                               })}
                             </div>
+                            {/* フォームから保存された工程写真 */}
+                            {stepPhotoUrl && (
+                              <a href={stepPhotoUrl} target="_blank" rel="noopener noreferrer" className="mb-2 inline-block">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={stepPhotoUrl} alt={`工程${stepNum}写真`} className="max-h-48 rounded-md border border-slate-200 object-contain" />
+                              </a>
+                            )}
                             {jigStep && (
                               <MediaUploader
                                 images={jigStep.images}
@@ -316,6 +341,12 @@ export default async function ManualViewPage({
           <p className="whitespace-pre-wrap">{manual.notes}</p>
         ) : (
           <p className="text-slate-500">なし</p>
+        )}
+        {manual.notesPhotoUrl && (
+          <a href={manual.notesPhotoUrl} target="_blank" rel="noopener noreferrer" className="mt-2 inline-block">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={manual.notesPhotoUrl} alt="注意点写真" className="max-h-64 rounded-md border border-slate-200 object-contain" />
+          </a>
         )}
       </ViewSection>
     </div>

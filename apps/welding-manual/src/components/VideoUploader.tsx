@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { deleteMedia } from "@/app/actions/media";
+import VideoEditModal from "@/components/VideoEditModal";
 
 type Media = { id: string; url: string; filename: string };
 
@@ -23,6 +24,7 @@ export default function VideoUploader({
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [editingVideo, setEditingVideo] = useState<{ id: string; url: string } | null>(null);
 
   async function upload(file: File) {
     setError(null);
@@ -64,14 +66,29 @@ export default function VideoUploader({
         {videos.length > 0 ? (
           <div className="space-y-2">
             {videos.map((v) => (
-              <div key={v.id} className="rounded-md border border-slate-200 overflow-hidden">
-                <video src={v.url} controls className="aspect-video w-full" />
+              <div key={v.id} className="group relative overflow-hidden rounded-md border border-slate-200">
+                <video src={v.url} controls playsInline className="aspect-video w-full" />
+                <button
+                  type="button"
+                  onClick={() => setEditingVideo({ id: v.id, url: v.url })}
+                  className="absolute left-2 top-2 rounded bg-black/60 px-2 py-0.5 text-xs text-white opacity-0 group-hover:opacity-100"
+                >
+                  編集
+                </button>
               </div>
             ))}
           </div>
         ) : !workVideoUrl ? (
           <p className="text-sm text-slate-400">なし</p>
         ) : null}
+        {editingVideo && (
+          <VideoEditModal
+            mediaId={editingVideo.id}
+            videoUrl={editingVideo.url}
+            onClose={() => setEditingVideo(null)}
+            onSaved={() => { setEditingVideo(null); router.refresh(); }}
+          />
+        )}
       </div>
     );
   }
@@ -94,12 +111,20 @@ export default function VideoUploader({
       {videos.length > 0 && (
         <div className="space-y-2">
           {videos.map((v) => (
-            <div key={v.id} className="group relative rounded-md border border-slate-200 overflow-hidden">
+            <div key={v.id} className="group relative overflow-hidden rounded-md border border-slate-200">
               <video
                 src={v.url}
                 controls
+                playsInline
                 className="aspect-video w-full"
               />
+              <button
+                type="button"
+                onClick={() => setEditingVideo({ id: v.id, url: v.url })}
+                className="absolute left-2 top-2 rounded bg-black/60 px-2 py-0.5 text-xs text-white opacity-0 group-hover:opacity-100"
+              >
+                編集
+              </button>
               <button
                 type="button"
                 onClick={() => onDelete(v.id)}
@@ -167,6 +192,14 @@ export default function VideoUploader({
         </div>
       )}
       {error && <p className="text-xs text-red-600">{error}</p>}
+      {editingVideo && (
+        <VideoEditModal
+          mediaId={editingVideo.id}
+          videoUrl={editingVideo.url}
+          onClose={() => setEditingVideo(null)}
+          onSaved={() => { setEditingVideo(null); router.refresh(); }}
+        />
+      )}
     </div>
   );
 }

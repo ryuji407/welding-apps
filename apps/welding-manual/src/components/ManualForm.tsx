@@ -17,9 +17,10 @@ type EnvBlockState = ManualFormInitial["environmentBlocks"][number];
 
 function programNumberError(value: string): string | null {
   if (!value) return null;
-  if (/[^\x00-\x7F]/.test(value)) return "半角数字4桁で入力してください（全角不可）";
+  if (/[^\x00-\x7F]/.test(value)) return "半角数字で入力してください（全角不可）";
   if (/[^0-9]/.test(value)) return "数字のみ入力できます";
-  if (value.length !== 4) return "4桁で入力してください";
+  const num = parseInt(value, 10);
+  if (num < 1 || num > 9999) return "1〜9999の範囲で入力してください";
   return null;
 }
 
@@ -78,16 +79,20 @@ export default function ManualForm({
         : [...s.robotEnvironments, env].sort(
             (a, b) => ENVIRONMENTS.indexOf(a) - ENVIRONMENTS.indexOf(b),
           );
+      // トグルオフ時もブロックデータを保持（誤操作によるデータ消失を防ぐ）
+      // トグルオン時：既存ブロックがあればそのまま使用、なければ新規作成
       const environmentBlocks = has
-        ? s.environmentBlocks.filter((b) => b.environment !== env)
-        : [
-            ...s.environmentBlocks,
-            { environment: env, robotPrograms: [], stepPhotos: {} },
-          ].sort(
-            (a, b) =>
-              ENVIRONMENTS.indexOf(a.environment) -
-              ENVIRONMENTS.indexOf(b.environment),
-          );
+        ? s.environmentBlocks
+        : s.environmentBlocks.some((b) => b.environment === env)
+          ? s.environmentBlocks
+          : [
+              ...s.environmentBlocks,
+              { environment: env, robotPrograms: [], stepPhotos: {} },
+            ].sort(
+              (a, b) =>
+                ENVIRONMENTS.indexOf(a.environment) -
+                ENVIRONMENTS.indexOf(b.environment),
+            );
       return { ...s, robotEnvironments, environmentBlocks };
     });
   }
@@ -224,7 +229,7 @@ export default function ManualForm({
           toollessToolColor: state.toollessToolColor || null,
           workVideoUrl: state.workVideoUrl || null,
           layoutPhotoUrl: state.layoutPhotoUrl || null,
-          environmentBlocks: state.environmentBlocks.map((b) => ({
+          environmentBlocks: state.environmentBlocks.filter((b) => state.robotEnvironments.includes(b.environment)).map((b) => ({
             environment: b.environment,
             stepPhotos: b.stepPhotos ?? {},
             robotPrograms: b.robotPrograms.flatMap((rp) => {

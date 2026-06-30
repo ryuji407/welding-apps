@@ -11,9 +11,9 @@ export async function deleteMedia(mediaId: string, processCode: string) {
 
   await prisma.mediaFile.delete({ where: { id: mediaId } });
 
-  // /api/files/uploads/... 形式のURLからファイルパスを解決
+  // /api/files/uploads/... 形式のURLからファイルパスを解決（?v=... クエリは除去）
   if (media.url.startsWith("/api/files/")) {
-    const relative = media.url.replace("/api/files/", "");
+    const relative = media.url.split("?")[0].replace("/api/files/", "");
     const filePath = path.join(getDataDir(), ...relative.split("/"));
     try {
       await unlink(filePath);
