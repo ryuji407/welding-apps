@@ -81,3 +81,23 @@ src/
 ## `getManualByCode` の挙動
 
 `processCode` で直接検索し、なければ `ProcessCodeAlias` 経由で親マニュアルを返す。閲覧・編集どちらでもエイリアス経由でアクセス可能。
+
+## 製品情報セクション（tube-manual から移植）
+
+`/products`・`/product-notes` 配下は tube-manual（SHOP3向けアプリ）の「製品情報」機能の移植。マニュアル機能とはデータ層が完全に別物なので注意:
+
+- **データ**: Firebase Firestore（`products` / `product_defects` / `product_templates` / `product_notes` コレクション）。tube-manual と同一プロジェクトを共有し、両アプリから同じデータが見える。Prisma/SQLite は使わない
+- **接続設定**: `.env.local` の `NEXT_PUBLIC_FIREBASE_*`（gitignore対象）。初期化は `src/lib/firebase.ts`
+- **写真・動画**: `PRODUCT_PHOTO_DIR`（`\\Sv-04\...\SHOP3\メンテナンスアプリ写真`）に保存。URL形式 `/uploads/<folder>/<file>` は tube-manual と互換（Firestoreに保存済みの既存URLをそのまま解決するため変更禁止）
+  - 配信: `src/app/uploads/[folder]/[filename]/route.ts`（動画はRange対応）
+  - アップロード: `/api/product-upload`（画像・クライアント側で圧縮済み）、`/api/product-upload-video`（ffmpeg圧縮）
+- **コード配置**: `src/features/products/` に隔離（tube-manual の src と同じ相対構造を維持して移植差分を最小化）。ページは `src/app/(products)/` の薄い Server Component ラッパー + `"use client"` の View
+- **product_notes の docId** は `encodeURIComponent(部品公式名)`。URL パラメータ `[encodedName]` はエンコードされたまま渡るため安全デコードしている
+- 製品の削除は論理削除（`isActive: false`）、テンプレートの削除は物理削除
+
+### 工程コード連携（工程表アプリとのリンク）
+
+- 製品は `processCodes: string[]`（工程コード、複数可）を持つ。マニュアル機能の `processCode` と同じキー体系
+- **`/products/code/[processCode]`** が工程表アプリのSHOP6ジョブのリンク着地点。該当製品があれば詳細へリダイレクト、なければ未登録案内＋工程コードプレフィル付き新規登録ボタン（`/products/new?processCode=XXX`）
+- 工程表アプリ側は `EditJobModal.tsx` で分岐: SHOP6ジョブ（`equipmentColumn === 'SHOP6'`）→ `/products/code/<コード>`、それ以外 → `/manual/<コード>`
+- **フレクシェCSV一括紐付け**: 製品一覧のCSVインポートはフレクシェCSV（ヘッダー3列目が `SHOP`）を自動判別し、S6行の 工程コード(0列) × 部品公式名(8列) で既存製品に紐付け・未登録は新規作成する。従来CSV（F列=製品名）のインポートも引き続き動作

@@ -28,8 +28,14 @@ type Cache = {
 
 let cache: Cache | null = null;
 
+/** マスタファイルの置き場所。専用の MASTER_DIR（ネットワーク共有）を優先し、
+ *  未設定なら従来どおり DATA_DIR 直下を見る。 */
+function masterDir(): string {
+  return (process.env.MASTER_DIR ?? getDataDir()).replace(/\\/g, "/");
+}
+
 function masterPath(): string {
-  return path.join(getDataDir(), MASTER_FILE);
+  return path.join(masterDir(), MASTER_FILE);
 }
 
 function loadMaster(): MasterRow[] {

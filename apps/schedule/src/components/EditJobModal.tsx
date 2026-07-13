@@ -185,10 +185,16 @@ export function EditJobModal({ job, isOpen, onClose, onSave, isAdmin = false, is
                                         {editedJob.isCompleted ? '完　了' : '未 着 手'}
                                     </span>
                                 </button>
-                                {/* 右：マニュアルボタン */}
+                                {/* 右：マニュアルボタン（SHOP6は製品情報ページ、それ以外は段取りマニュアル） */}
                                 {editedJob.operationCode ? (
                                     <a
-                                        href={`http://192.168.1.249:3000/manual/${editedJob.operationCode.includes(':') ? editedJob.operationCode.split(':').slice(1).join(':') : editedJob.operationCode}`}
+                                        href={(() => {
+                                            const code = editedJob.operationCode.includes(':') ? editedJob.operationCode.split(':').slice(1).join(':') : editedJob.operationCode;
+                                            const isShop6 = editedJob.equipmentColumn === 'SHOP6' || editedJob.allEquipmentColumns?.includes('SHOP6');
+                                            return isShop6
+                                                ? `http://192.168.1.249:3000/products/code/${encodeURIComponent(code)}`
+                                                : `http://192.168.1.249:3000/manual/${code}`;
+                                        })()}
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:border-amber-400 transition-all font-semibold"

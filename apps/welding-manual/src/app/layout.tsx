@@ -38,6 +38,7 @@ export default function RootLayout({
               <a href="/" className="hover:underline">一覧</a>
               <a href="/manual/new" className="hover:underline">新規作成</a>
               <a href="/export" className="hover:underline">エクスポート</a>
+              <a href="/products" className="hover:underline">製品情報</a>
             </nav>
           </div>
         </header>
