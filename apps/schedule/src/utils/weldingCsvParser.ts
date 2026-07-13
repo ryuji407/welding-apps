@@ -690,7 +690,6 @@ export const parseCSV = (
     if (lines.length === 0) return { jobs: [] };
 
     const allJobs: Job[] = []; // Renamed to allJobs to avoid conflict with finalJobs
-    const s6PickingJobs: Job[] = []; // S6ピッキングリスト専用ジョブ（assignJobs を通さない）
     let extractedDate: string | undefined;
     const foundDates: Record<string, number> = {};
 
@@ -778,47 +777,57 @@ export const parseCSV = (
                 }
 
             } else if (shop === 'S6') {
-                // ── S6ピッキングリスト行 ──────────────────────────────────
-                const jigAddress = values[31]?.trim() || '';
-                // 治具番地が空・「ー」・「-」の場合はスキップ
-                if (!jigAddress || jigAddress === 'ー' || jigAddress === '-') return;
+                // ── SHOP6行（「SHOP6」設備として通常の担当者レーンに割り当てる） ─────
+                const operationCode = values[0]?.trim() || '';
+                if (!operationCode) return;
 
                 if (dateFormatted) {
                     foundDates[dateFormatted] = (foundDates[dateFormatted] || 0) + 1;
                 }
 
-                const operationCode = values[0]?.trim() || '';
-                if (!operationCode) return;
+                const job: any = {};
+                job.id = `flexche-shop6-${Date.now()}-${i}`;
+                job.progress = 0;
+                job.isCompleted = false;
+                job.startTime = '00:00';
+                job.endTime = '00:00';
 
-                const s6Job: Job = {
-                    id: `flexche-s6-${Date.now()}-${i}`,
-                    progress: 0,
-                    isCompleted: false,
-                    startTime: '00:00',
-                    endTime: '00:00',
-                    machine: 'S6',
-                    isPickingListOnly: true,
-                    operationCode,
-                    name: values[8]?.trim() || values[4]?.trim() || '不明な工程',
-                    finishedProductNumber: values[4]?.trim() || '',
-                    componentOfficialName: values[8]?.trim() || '',
-                    componentNumber: values[7]?.trim() || '',
-                    prototypeNumber: values[5]?.trim() || '',
-                    dailyQuantity: cleanQuantity(values[9] || ''),
-                    totalQuantity: cleanQuantity(values[10] || ''),
-                    workerCount: values[12]?.trim() || '1',
-                    setupTime: values[13]?.trim() || '0',
-                    productionTime: values[14]?.trim() || '0',
-                    shipDate: values[15]?.trim() || '',
-                    note: values[17]?.trim() || '',
-                    customer: values[18]?.trim() || '',
-                    jigLocation: values[30]?.trim() || '',
-                    jigAddress,
-                    originalDate: dateFormatted,
-                    durationMinutes: 0,
-                    color: DEFAULT_WELDING_COLOR,
-                };
-                s6PickingJobs.push(s6Job);
+                job.name = values[8]?.trim() || values[4]?.trim() || '不明な工程';
+                job.operationCode = operationCode;
+                job.finishedProductNumber = values[4]?.trim() || '';
+                job.componentOfficialName = values[8]?.trim() || '';
+                job.componentNumber = values[7]?.trim() || '';
+                job.prototypeNumber = values[5]?.trim() || '';
+                job.dailyQuantity = cleanQuantity(values[9] || '');
+                job.totalQuantity = cleanQuantity(values[10] || '');
+                job.workerCount = values[12]?.trim() || '1';
+                job.setupTime = values[13]?.trim() || '0';
+                job.productionTime = values[14]?.trim() || '0';
+                job.shipDate = values[15]?.trim() || '';
+                job.note = values[17]?.trim() || '';
+                job.customer = values[18]?.trim() || '';
+                job.jigLocation = values[30]?.trim() || '';
+                job.jigAddress = values[31]?.trim() || '';
+                job.originalDate = dateFormatted;
+
+                // TIGなどと同様に「SHOP6」を設備として扱い、担当者レーンへの割り当ては assignJobs に任せる
+                job.equipmentColumn = 'SHOP6';
+                job.allEquipmentColumns = ['SHOP6'];
+                job.color = equipmentColors['SHOP6'] || WELDING_EQUIPMENT_COLORS['SHOP6'] || equipmentColors['その他'] || DEFAULT_WELDING_COLOR;
+                job.machine = 'Unassigned';
+
+                const setupSec = parseInt((job.setupTime || '0').replace(/,/g, ''), 10) || 0;
+                const prodSec = parseInt((job.productionTime || '0').replace(/,/g, ''), 10) || 0;
+                job.durationMinutes = Math.ceil((setupSec + prodSec) / 60);
+
+                if (job.durationMinutes > 0) {
+                    const count = parseInt(String(job.workerCount || '1'), 10) || 1;
+                    if (count === 2) {
+                        allJobs.push({ ...job, id: `${job.id}-1` } as Job, { ...job, id: `${job.id}-2` } as Job);
+                    } else {
+                        allJobs.push(job as Job);
+                    }
+                }
             }
         });
     } else if (isHeaderless) {
@@ -1161,13 +1170,29 @@ export const parseCSV = (
         }
     });
 
-    // S6ピッキングリスト専用ジョブを結合（assignJobs を通していないので末尾に追加）
-    const combinedJobs = isFlexche ? [...finalJobs, ...s6PickingJobs] : finalJobs;
+    const combinedJobs = finalJobs;
 
     const allDates = Object.keys(foundDates).sort();
-    console.log('parseCSV completed. Jobs found:', combinedJobs.length, '(S6 picking:', s6PickingJobs.length, ') Date identified:', mostFrequentDate, 'isFlexche:', isFlexche);
+    console.log('parseCSV completed. Jobs found:', combinedJobs.length, 'Date identified:', mostFrequentDate, 'isFlexche:', isFlexche);
     if (isFlexche) {
-        return { jobs: combinedJobs, date: mostFrequentDate, isFlexche: true, allDates };
+        // 自動挿入ジョブ（fixedJobs）は assignJobs 内で日付情報を持たずに1回だけ挿入されるため、
+        // 日付ごとにインポートを分ける（handleFlexcheConfirm）と originalDate 不一致でフィルタされ消えてしまう。
+        // ここで検出された全日付分に複製し、どの日付を選んでもインポートされるようにする。
+        const datedJobs: Job[] = [];
+        const undatedFixedJobs: Job[] = [];
+        combinedJobs.forEach(job => {
+            if (job.originalDate) {
+                datedJobs.push(job);
+            } else {
+                undatedFixedJobs.push(job);
+            }
+        });
+        allDates.forEach(date => {
+            undatedFixedJobs.forEach(fj => {
+                datedJobs.push({ ...fj, id: `${fj.id}-${date.replace(/\//g, '')}`, originalDate: date });
+            });
+        });
+        return { jobs: datedJobs, date: mostFrequentDate, isFlexche: true, allDates };
     }
     return { jobs: combinedJobs, date: mostFrequentDate };
 };

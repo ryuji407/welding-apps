@@ -42,9 +42,17 @@ export function PickingList({ jobs, scheduleDate, isOpen, onClose, isWeldingLine
 
     // Sort jobs
     const sortedJobs = useMemo(() => {
-        const sortableJobs = jobs.filter(job =>
-            job.changeInstruction !== '追加' && !fixedJobNames.includes(job.name) && !job.isNonProduction && !!job.operationCode
-        );
+        const sortableJobs = jobs.filter(job => {
+            if (job.changeInstruction === '追加' || fixedJobNames.includes(job.name) || job.isNonProduction || !job.operationCode) {
+                return false;
+            }
+            // SHOP6は治具番地がある行のみピッキングリストに表示（ガントチャートには全件表示）
+            if (job.equipmentColumn === 'SHOP6') {
+                const addr = job.jigAddress || '';
+                if (!addr || addr === 'ー' || addr === '-') return false;
+            }
+            return true;
+        });
         const { key, direction } = sortConfig;
 
         return sortableJobs.sort((a, b) => {

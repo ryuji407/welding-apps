@@ -684,9 +684,13 @@ function DraggableJob({ job, machineStartMinutes, machineTotalVisualMinutes: _ma
                                         <div className="text-[10px] opacity-90 truncate font-semibold">塗装色: {job.paintColor}</div>
                                     ) : null,
                                     ctProductionTime: () => {
-                                        const ctSeconds = parseInt((job.cycleTime || '0').replace(/,/g, ''), 10) || 0;
+                                        const rawCtSeconds = parseInt((job.cycleTime || '0').replace(/,/g, ''), 10) || 0;
                                         const prodSeconds = parseInt((job.productionTime || '0').replace(/,/g, ''), 10) || 0;
                                         const qty = parseInt((job.dailyQuantity || '0').replace(/,/g, ''), 10) || 0;
+                                        // CT列が無い（＝全体CSV）場合は 製造時間÷当日数量 で算出
+                                        const ctSeconds = rawCtSeconds > 0
+                                            ? rawCtSeconds
+                                            : (qty > 0 ? Math.round(prodSeconds / qty) : 0);
                                         // ラベルは CT×個数のみ（段取りなし）。cycleTime 未設定時は productionTime÷60 で代替。
                                         const prodMinutes = (ctSeconds > 0 && qty > 0)
                                             ? Math.ceil(ctSeconds * qty / 60)

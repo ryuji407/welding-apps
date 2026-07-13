@@ -46,6 +46,7 @@ export interface Job {
     paintColor?: string; // 塗装色
     textColor?: string; // テキスト色 (緑色などに個別設定)
     changeInstruction?: string; // 変更指示 (追加/削除など)
+    equipmentColumn?: string; // 検出された主設備名（パース時のみ使用）
     allEquipmentColumns?: string[]; // 複数設備対応（パース時のみ使用）
     isPickingListOnly?: boolean; // ピッキングリストのみ表示（ガントチャートに表示しない）
 
