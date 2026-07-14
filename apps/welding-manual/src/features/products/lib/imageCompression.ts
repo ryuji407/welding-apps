@@ -2,7 +2,7 @@ import imageCompression from 'browser-image-compression'
 
 const options = {
   maxSizeMB: 0.5,
-  maxWidthOrHeight: 1280,
+  maxWidthOrHeight: 1280, // 720p相当（長辺1280px）
   useWebWorker: true,
   fileType: 'image/jpeg' as const,
 }

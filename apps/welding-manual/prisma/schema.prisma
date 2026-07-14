@@ -95,3 +95,54 @@ model MediaFile {
   @@index([manualId])
   @@index([jigStepId])
 }
+
+// ─────────────────────────────────────────────────────────
+// 製品情報（tube-manual から移植。旧 Firebase Firestore を SQLite に移行）
+// ネスト配列は Manual 群と同様に JSON 文字列カラムで保持する。
+// id は Firestore の自動ID（既存文字列ID）をそのまま保持する。
+// ─────────────────────────────────────────────────────────
+
+model Product {
+  id                       String   @id                       // Firestore由来の文字列ID
+  name                     String                             // 製品名（旧: 工程名称）
+  processCodes             String   @default("[]")            // JSON: string[]（工程コード。工程表からのリンクキー）
+  processingNotes          String   @default("")
+  photoUrls                String   @default("[]")            // JSON: string[]
+  specifications           String   @default("[]")            // JSON: {label,value,photoUrl?}[]
+  appliedTemplateInstances String   @default("[]")            // JSON: {instanceId,templateId}[]
+  templateValues           String   @default("[]")            // JSON: TemplateFieldValue[]
+  isActive                 Boolean  @default(true)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+}
+
+model ProductTemplate {
+  id        String   @id                                       // Firestore由来の文字列ID
+  name      String
+  fields    String   @default("[]")                            // JSON: TemplateField[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ProductDefect {
+  id          String   @id                                     // Firestore由来の文字列ID
+  productId   String
+  productName String
+  occurredAt  DateTime
+  reportedBy  String   @default("")
+  description String   @default("")
+  photoUrls   String   @default("[]")                          // JSON: string[]
+  createdAt   DateTime @default(now())
+
+  @@index([productId])
+}
+
+model ProductNote {
+  id                    String   @id                           // = encodeURIComponent(componentOfficialName)
+  componentOfficialName String   @unique
+  warnings              String   @default("[]")                // JSON: {level,text}[]
+  instructionSteps      String   @default("[]")                // JSON: InstructionStep[]
+  notes                 String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}

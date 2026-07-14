@@ -13,8 +13,8 @@ if (ffmpegStatic) ffmpeg.setFfmpegPath(ffmpegStatic);
 
 const IMAGE_MAX_PX = 1920;  // 最長辺の上限（px）
 const IMAGE_QUALITY = 80;   // JPEG品質
-const VIDEO_MAX_WIDTH = 1280;  // 動画の最大横幅（px）
-const VIDEO_MAX_HEIGHT = 720;  // 動画の最大縦幅（px）
+const VIDEO_MAX_WIDTH = 640;   // 動画の最大横幅（px）※360p相当
+const VIDEO_MAX_HEIGHT = 360;  // 動画の最大縦幅（px）※360p
 const VIDEO_CRF = 28;          // 動画品質（低いほど高品質・大容量。18〜28が実用範囲）
 
 /** ffmpegで動画を圧縮してバッファで返す */
@@ -24,8 +24,8 @@ function compressVideo(inputPath: string, outputPath: string): Promise<void> {
       .videoCodec("libx264")
       .audioCodec("aac")
       .outputOptions([
-        `-vf scale='min(${VIDEO_MAX_WIDTH},iw)':'-2'`,  // 横幅を上限以内に、縦は自動
-        `-vf scale='-2':'min(${VIDEO_MAX_HEIGHT},ih)'`, // 縦幅も同様に制限
+        // 640x360 以内に収まるよう縦横比を保って縮小し、libx264向けに偶数サイズへ丸める
+        `-vf scale='min(${VIDEO_MAX_WIDTH},iw)':'min(${VIDEO_MAX_HEIGHT},ih)':force_original_aspect_ratio=decrease,scale=trunc(iw/2)*2:trunc(ih/2)*2`,
         `-crf ${VIDEO_CRF}`,
         "-preset fast",
         "-movflags +faststart",  // Web再生向け（モバイルで先頭から再生可能）
@@ -54,6 +54,11 @@ const KIND_FOLDER: Record<string, string> = {
 /** ルートフォルダ名 */
 const BASE_FOLDER = "マニュアル";
 
+/** Windowsで使用できない文字をファイル名から除去する */
+function sanitizeFilenamePart(s: string): string {
+  return s.replace(/[\\/:*?"<>|]/g, "_");
+}
+
 /**
  * 保存先フォルダを決定する。
  * 全ファイルを マニュアル/{processCode}/{日本語kind}/ 以下にまとめることで
@@ -61,13 +66,15 @@ const BASE_FOLDER = "マニュアル";
  * jig は 治具工程/工程{N}/ のようにステップごとにサブフォルダを分ける。
  *
  * フォールバック: processCode が特定できない場合は マニュアル/{manualId}/{kind}/
+ *
+ * 併せて、ファイル名生成に使う工程コード（code）と、jig の場合のステップ番号を返す。
  */
 async function resolveUploadDir(
   kind: string,
   processCode: string | null,
   manualId: string | null,
   jigStepId: string | null,
-): Promise<{ dir: string; urlBase: string }> {
+): Promise<{ dir: string; urlBase: string; code: string; jigStepNumber: number | null }> {
   const dataDir = getDataDir();
   const kindFolder = KIND_FOLDER[kind] ?? kind;
 
@@ -75,7 +82,7 @@ async function resolveUploadDir(
   if (processCode) {
     const safeCode = processCode.replace(/[^a-zA-Z0-9_\-]/g, "_");
     const dir = path.join(dataDir, BASE_FOLDER, safeCode, kindFolder);
-    return { dir, urlBase: `${BASE_FOLDER}/${safeCode}/${kindFolder}` };
+    return { dir, urlBase: `${BASE_FOLDER}/${safeCode}/${kindFolder}`, code: safeCode, jigStepNumber: null };
   }
 
   // 2. jigStepId のみの場合 → DB から processCode・stepNumber を取得
@@ -89,7 +96,7 @@ async function resolveUploadDir(
       const safeCode = code.replace(/[^a-zA-Z0-9_\-]/g, "_");
       const stepFolder = `工程${step!.stepNumber}`;
       const dir = path.join(dataDir, BASE_FOLDER, safeCode, "治具工程", stepFolder);
-      return { dir, urlBase: `${BASE_FOLDER}/${safeCode}/治具工程/${stepFolder}` };
+      return { dir, urlBase: `${BASE_FOLDER}/${safeCode}/治具工程/${stepFolder}`, code: safeCode, jigStepNumber: step!.stepNumber };
     }
   }
 
@@ -103,11 +110,11 @@ async function resolveUploadDir(
     if (code) {
       const safeCode = code.replace(/[^a-zA-Z0-9_\-]/g, "_");
       const dir = path.join(dataDir, BASE_FOLDER, safeCode, kindFolder);
-      return { dir, urlBase: `${BASE_FOLDER}/${safeCode}/${kindFolder}` };
+      return { dir, urlBase: `${BASE_FOLDER}/${safeCode}/${kindFolder}`, code: safeCode, jigStepNumber: null };
     }
     // フォールバック: processCode 不明時は manualId フォルダ
     const dir = path.join(dataDir, BASE_FOLDER, manualId, kindFolder);
-    return { dir, urlBase: `${BASE_FOLDER}/${manualId}/${kindFolder}` };
+    return { dir, urlBase: `${BASE_FOLDER}/${manualId}/${kindFolder}`, code: manualId, jigStepNumber: null };
   }
 
   throw new Error("processCode / manualId / jigStepId のいずれかが必要です");
@@ -120,6 +127,8 @@ export async function POST(req: NextRequest) {
   const manualId = form.get("manualId") ? String(form.get("manualId")) : null;
   const jigStepId = form.get("jigStepId") ? String(form.get("jigStepId")) : null;
   const processCode = form.get("processCode") ? String(form.get("processCode")) : null;
+  const environment = form.get("environment") ? String(form.get("environment")) : null;
+  const stepNumberField = form.get("stepNumber") ? String(form.get("stepNumber")) : null;
 
   if (!(file instanceof File)) {
     return NextResponse.json({ error: "fileがありません" }, { status: 400 });
@@ -176,37 +185,65 @@ export async function POST(req: NextRequest) {
     ext = ".mp4";
   }
 
-  const safeName = `${randomUUID()}${ext}`;
-
   let uploadDir: string;
   let urlBase: string;
+  let code: string;
+  let jigStepNumber: number | null;
   try {
-    ({ dir: uploadDir, urlBase } = await resolveUploadDir(kind, processCode, manualId, jigStepId));
+    ({ dir: uploadDir, urlBase, code, jigStepNumber } = await resolveUploadDir(kind, processCode, manualId, jigStepId));
   } catch {
     return NextResponse.json({ error: "保存先の特定に失敗しました" }, { status: 500 });
   }
 
+  // MediaFile として記録される（複数枚保持できる）アップロードかどうか
+  const isGallery = Boolean(manualId || jigStepId);
+
+  // manualId / jigStepId が確定している場合は先に対象マニュアルIDを解決しておく（ファイル名の連番計算に使う）
+  let targetManualId: string | null = null;
+  if (isGallery) {
+    targetManualId =
+      manualId ??
+      (await prisma.jigProcessStep.findUnique({
+        where: { id: jigStepId! },
+        select: { manualId: true },
+      }))?.manualId ??
+      null;
+
+    if (!targetManualId) {
+      return NextResponse.json({ error: "manualが見つかりません" }, { status: 404 });
+    }
+  }
+
+  // ファイル名: 工程コード＋写真の内容がひと目でわかる名前にする
+  let baseName: string;
+  if (kind === "jig" && jigStepNumber != null) {
+    baseName = `${code}_治具工程${jigStepNumber}`;
+  } else if (kind === "program" && environment && stepNumberField) {
+    baseName = `${code}_${environment}_プログラム${stepNumberField}`;
+  } else {
+    baseName = `${code}_${KIND_FOLDER[kind] ?? kind}`;
+  }
+  baseName = sanitizeFilenamePart(baseName);
+
+  if (isGallery) {
+    const seq = kind === "jig"
+      ? await prisma.mediaFile.count({ where: { jigStepId: jigStepId!, kind: "jig" } })
+      : await prisma.mediaFile.count({ where: { manualId: targetManualId!, kind } });
+    baseName = `${baseName}_${seq + 1}`;
+  }
+
+  const safeName = `${baseName}${ext}`;
+
   await mkdir(uploadDir, { recursive: true });
   await writeFile(path.join(uploadDir, safeName), buffer);
-  const url = `/api/files/${urlBase}/${safeName}`;
 
   // processCode ベースのアップロード（新規作成中）は MediaFile レコード不要
-  if (!manualId && !jigStepId) {
-    return NextResponse.json({ url });
+  if (!isGallery) {
+    // 上書き保存になるため、ブラウザキャッシュを避けるバージョンクエリを付与する
+    return NextResponse.json({ url: `/api/files/${urlBase}/${safeName}?v=${Date.now()}` });
   }
 
-  // manualId / jigStepId が確定している場合は MediaFile に記録
-  const targetManualId =
-    manualId ??
-    (await prisma.jigProcessStep.findUnique({
-      where: { id: jigStepId! },
-      select: { manualId: true },
-    }))?.manualId;
-
-  if (!targetManualId) {
-    return NextResponse.json({ error: "manualが見つかりません" }, { status: 404 });
-  }
-
+  const url = `/api/files/${urlBase}/${safeName}`;
   const media = await prisma.mediaFile.create({
     data: {
       url,

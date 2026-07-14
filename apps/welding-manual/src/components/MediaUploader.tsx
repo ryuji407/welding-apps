@@ -69,16 +69,16 @@ export default function MediaUploader({
 
   if (readonly) {
     return (
-      <div className="space-y-2">
+      <div className="space-y-3">
         {images.length === 0 ? (
           <p className="text-sm text-slate-400">なし</p>
         ) : (
-          <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
+          <div className="space-y-3">
             {images.map((img) => (
-              <div key={img.id} className="group relative aspect-video overflow-hidden rounded border border-slate-200">
-                <a href={img.url} target="_blank" rel="noopener noreferrer" className="block h-full">
+              <div key={img.id} className="group relative w-full overflow-hidden rounded border border-slate-200">
+                <a href={img.url} target="_blank" rel="noopener noreferrer" className="block">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={img.url} alt={img.filename} className="h-full w-full object-cover" />
+                  <img src={img.url} alt={img.filename} className="w-full object-contain" />
                 </a>
                 <button
                   type="button"

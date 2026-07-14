@@ -1,52 +1,53 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import {
-  collection,
-  onSnapshot,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  doc,
-  serverTimestamp,
-  query,
-  orderBy,
-} from 'firebase/firestore'
-import { db } from '../lib/firebase'
+// 旧 Firebase Firestore 依存を廃止し、SQLite(Prisma) の server action を呼ぶ。
+
+import { useCallback, useEffect, useState } from 'react'
 import type { ProductTemplate, ProductTemplateFormData } from '../types/template'
+import {
+  listTemplatesAction,
+  createTemplateAction,
+  updateTemplateAction,
+  deleteTemplateAction,
+} from '@/app/actions/products'
 
 export function useTemplates() {
   const [templates, setTemplates] = useState<ProductTemplate[]>([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    const q = query(collection(db, 'product_templates'), orderBy('createdAt', 'desc'))
-    const unsub = onSnapshot(q, (snap) => {
-      setTemplates(snap.docs.map((d) => ({ id: d.id, ...d.data() } as ProductTemplate)))
-      setLoading(false)
-    })
-    return () => unsub()
+  const refetch = useCallback(async () => {
+    setTemplates(await listTemplatesAction())
+    setLoading(false)
   }, [])
 
-  async function addTemplate(data: ProductTemplateFormData): Promise<string> {
-    const ref = await addDoc(collection(db, 'product_templates'), {
-      ...data,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    })
-    return ref.id
-  }
+  useEffect(() => {
+    void refetch()
+  }, [refetch])
 
-  async function updateTemplate(id: string, data: ProductTemplateFormData) {
-    await updateDoc(doc(db, 'product_templates', id), {
-      ...data,
-      updatedAt: serverTimestamp(),
-    })
-  }
+  const addTemplate = useCallback(
+    async (data: ProductTemplateFormData): Promise<string> => {
+      const id = await createTemplateAction(data)
+      await refetch()
+      return id
+    },
+    [refetch],
+  )
 
-  async function deleteTemplate(id: string) {
-    await deleteDoc(doc(db, 'product_templates', id))
-  }
+  const updateTemplate = useCallback(
+    async (id: string, data: ProductTemplateFormData) => {
+      await updateTemplateAction(id, data)
+      await refetch()
+    },
+    [refetch],
+  )
+
+  const deleteTemplate = useCallback(
+    async (id: string) => {
+      await deleteTemplateAction(id)
+      await refetch()
+    },
+    [refetch],
+  )
 
   return { templates, loading, addTemplate, updateTemplate, deleteTemplate }
 }

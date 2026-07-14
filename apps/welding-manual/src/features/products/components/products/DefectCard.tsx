@@ -22,7 +22,7 @@ export default function DefectCard({ defect }: Props) {
           <AlertCircle size={16} className="text-red-500" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-xs text-slate-500">{formatDateTime(defect.occurredAt.toDate())}</p>
+          <p className="text-xs text-slate-500">{formatDateTime(new Date(defect.occurredAt))}</p>
           <p className="font-semibold text-sm text-slate-800 mt-0.5 line-clamp-2">
             {defect.description}
           </p>
@@ -43,6 +43,8 @@ export default function DefectCard({ defect }: Props) {
                 <img
                   src={url}
                   alt={`不良写真${i + 1}`}
+                  loading="lazy"
+                  decoding="async"
                   className="w-full aspect-square object-cover rounded-xl"
                 />
               </a>

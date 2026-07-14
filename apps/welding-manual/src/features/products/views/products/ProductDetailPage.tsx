@@ -7,7 +7,7 @@ import {
   Check, X, LayoutTemplate, ChevronRight, Trash2,
 } from 'lucide-react'
 
-import { useProducts, useProductDefects } from '../../hooks/useProducts'
+import { useProduct, useProductDefects } from '../../hooks/useProducts'
 import { useTemplates } from '../../hooks/useTemplates'
 import { useImageUpload } from '../../hooks/useImageUpload'
 import DefectCard from '../../components/products/DefectCard'
@@ -27,7 +27,7 @@ type Tab = 'info' | 'defects'
 export default function ProductDetailPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
-  const { products, updateProduct } = useProducts()
+  const { product, loading: productLoading, updateProduct } = useProduct(id)
   const { defects, loading: defectsLoading, addDefect } = useProductDefects(id!)
   const { templates } = useTemplates()
   const { uploadImages, uploadVideo, uploading } = useImageUpload()
@@ -51,7 +51,9 @@ export default function ProductDetailPage() {
   const [pendingVideos, setPendingVideos] = useState<Record<string, File>>({})
   const [saving, setSaving] = useState(false)
 
-  const product = products.find((p) => p.id === id)
+  if (productLoading) {
+    return <p className="p-8 text-center text-sm text-slate-400">読み込み中...</p>
+  }
 
   if (!product) {
     return (

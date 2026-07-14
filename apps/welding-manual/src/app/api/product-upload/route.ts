@@ -1,10 +1,13 @@
-// 製品情報の画像アップロード（tube-manual server.js の POST /api/upload 互換）
-// クライアント側で圧縮済みの画像を受け取り、SHOP3 ネットワーク共有に保存する。
-// folder は basename のみ使用（tube-manual と保存先を揃えるため意図的に踏襲）。
+// 製品情報の画像アップロード。
+// クライアント側で圧縮済みの画像を受け取り、DATA_DIR/製品情報/<folder>/ に保存する
+// （マニュアル本体と保存場所・配信ルールを統一。配信は /api/files 経由）。
+// folder は basename のみ使用。
 import { NextRequest, NextResponse } from "next/server";
 import { writeFile, mkdir } from "node:fs/promises";
 import path from "node:path";
-import { PRODUCT_PHOTO_DIR } from "@/lib/productPhotoDir";
+import { getDataDir } from "@/lib/db";
+
+const PHOTO_SUBDIR = "製品情報";
 
 const MAX_FILES = 5;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5MB（圧縮済み前提）
@@ -29,7 +32,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const dir = path.join(PRODUCT_PHOTO_DIR, folder);
+  const dir = path.join(getDataDir(), PHOTO_SUBDIR, folder);
   try {
     await mkdir(dir, { recursive: true });
   } catch (err) {
@@ -42,7 +45,7 @@ export async function POST(req: NextRequest) {
     const ext = path.extname(file.name) || ".jpg";
     const filename = `photo_${Date.now()}_${Math.random().toString(36).slice(2, 8)}${ext}`;
     await writeFile(path.join(dir, filename), Buffer.from(await file.arrayBuffer()));
-    urls.push(`/uploads/${folder}/${filename}`);
+    urls.push(`/api/files/${PHOTO_SUBDIR}/${folder}/${filename}`);
   }
 
   return NextResponse.json({ urls });

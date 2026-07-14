@@ -1,5 +1,3 @@
-import type { Timestamp } from 'firebase/firestore'
-
 export type TemplateFieldType = 'text' | 'photo' | 'video' | 'select' | 'checkbox'
 
 export interface TemplateField {
@@ -14,8 +12,8 @@ export interface ProductTemplate {
   id: string
   name: string
   fields: TemplateField[]
-  createdAt: Timestamp
-  updatedAt: Timestamp
+  createdAt: number
+  updatedAt: number
 }
 
 export interface ProductTemplateFormData {

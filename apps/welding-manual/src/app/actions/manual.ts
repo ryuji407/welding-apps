@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { ENVIRONMENTS, ROBOTS } from "@/lib/manual";
+import { unlinkUploadedFile, removeManualUploadDir } from "@/lib/uploads";
 
 const envEnum = z.enum(ENVIRONMENTS);
 
@@ -44,8 +45,58 @@ const manualSchema = z.object({
 
 export type ManualInput = z.infer<typeof manualSchema>;
 
+/** ?v=... のようなキャッシュ回避クエリを除いた実ファイルパス相当の文字列にする */
+function stripVersionQuery(url: string): string {
+  return url.split("?")[0];
+}
+
+/** DB上に現在保存されている画像・動画URLを全て集める（保存後の差分削除用） */
+async function collectManualFileUrls(manualId: string): Promise<Set<string>> {
+  const urls = new Set<string>();
+
+  const manual = await prisma.manual.findUnique({
+    where: { id: manualId },
+    select: { layoutPhotoUrl: true, wagonPhotoUrl: true, notesPhotoUrl: true, workVideoUrl: true },
+  });
+  if (manual) {
+    for (const u of [manual.layoutPhotoUrl, manual.wagonPhotoUrl, manual.notesPhotoUrl, manual.workVideoUrl]) {
+      if (u) urls.add(stripVersionQuery(u));
+    }
+  }
+
+  const blocks = await prisma.environmentBlock.findMany({
+    where: { manualId },
+    select: { stepPhotos: true, programs: { select: { photoUrl: true } } },
+  });
+  for (const block of blocks) {
+    const stepPhotos = JSON.parse(block.stepPhotos || "{}") as Record<string, string>;
+    for (const u of Object.values(stepPhotos)) if (u) urls.add(stripVersionQuery(u));
+    for (const p of block.programs) if (p.photoUrl) urls.add(stripVersionQuery(p.photoUrl));
+  }
+
+  return urls;
+}
+
+function collectInputFileUrls(data: ManualInput): Set<string> {
+  const urls = new Set<string>();
+  for (const u of [data.layoutPhotoUrl, data.wagonPhotoUrl, data.notesPhotoUrl, data.workVideoUrl]) {
+    if (u) urls.add(stripVersionQuery(u));
+  }
+  for (const block of data.environmentBlocks) {
+    for (const u of Object.values(block.stepPhotos ?? {})) if (u) urls.add(stripVersionQuery(u));
+    for (const rp of block.robotPrograms) if (rp.photoUrl) urls.add(stripVersionQuery(rp.photoUrl));
+  }
+  return urls;
+}
+
 export async function saveManual(input: ManualInput) {
   const data = manualSchema.parse(input);
+
+  const existing = await prisma.manual.findUnique({
+    where: { processCode: data.processCode },
+    select: { id: true },
+  });
+  const oldUrls = existing ? await collectManualFileUrls(existing.id) : new Set<string>();
 
   const baseData = {
     productName: data.productName ?? null,
@@ -121,6 +172,11 @@ export async function saveManual(input: ManualInput) {
     });
   }
 
+  // 参照されなくなった旧ファイルを削除（差し替え・削除の両方に対応）
+  const newUrls = collectInputFileUrls(data);
+  const removedUrls = [...oldUrls].filter((u) => !newUrls.has(u));
+  await Promise.all(removedUrls.map(unlinkUploadedFile));
+
   revalidatePath("/");
   revalidatePath(`/manual/${data.processCode}`);
 }
@@ -133,4 +189,5 @@ export async function saveManualAndRedirect(input: ManualInput) {
 export async function deleteManual(processCode: string) {
   await prisma.manual.delete({ where: { processCode } });
   revalidatePath("/");
+  await removeManualUploadDir(processCode);
 }

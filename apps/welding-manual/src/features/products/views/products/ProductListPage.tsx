@@ -2,7 +2,7 @@
 
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Plus, Package, ChevronRight, Search, Upload, X, CheckCircle, AlertCircle, LayoutTemplate } from 'lucide-react'
-import { useRef, useState, useEffect } from 'react'
+import { useRef, useState, useEffect, useMemo } from 'react'
 import { useProducts } from '../../hooks/useProducts'
 
 interface ImportResult {
@@ -53,11 +53,14 @@ export default function ProductListPage() {
     if (urlSearch) setSearch(urlSearch)
   }, [urlSearch])
 
-  const filtered = products.filter(
-    (p) =>
-      p.name.toLowerCase().includes(search.toLowerCase()) ||
-      (p.processCodes ?? []).some((c) => c.toLowerCase().includes(search.toLowerCase()))
-  )
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase()
+    return products.filter(
+      (p) =>
+        p.name.toLowerCase().includes(q) ||
+        (p.processCodes ?? []).some((c) => c.toLowerCase().includes(q))
+    )
+  }, [products, search])
 
   async function handleCSVImport(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -289,6 +292,10 @@ export default function ProductListPage() {
                         <img
                           src={p.photoUrls[0]}
                           alt={p.name}
+                          loading="lazy"
+                          decoding="async"
+                          width={48}
+                          height={48}
                           className="w-full h-full object-cover"
                         />
                       ) : (

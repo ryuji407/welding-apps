@@ -1,6 +1,7 @@
-import type { Timestamp } from 'firebase/firestore'
 import type { TemplateFieldType } from './template'
 import type { InstructionStep } from './maintenance'
+
+// 旧 Firebase Timestamp を廃止し、エポックミリ秒(number)で保持する
 
 export interface Specification {
   label: string
@@ -31,8 +32,8 @@ export interface Product {
   appliedTemplateInstances?: { instanceId: string, templateId: string }[] // 新形式
   templateValues?: TemplateFieldValue[]
   isActive: boolean
-  createdAt: Timestamp
-  updatedAt: Timestamp
+  createdAt: number
+  updatedAt: number
 }
 
 export interface ProductFormData {
@@ -41,6 +42,7 @@ export interface ProductFormData {
   processingNotes: string
   specifications: Specification[]
   appliedTemplateIds?: string[]
+  appliedTemplateInstances?: { instanceId: string, templateId: string }[]
   templateValues?: TemplateFieldValue[]
 }
 
@@ -48,11 +50,11 @@ export interface ProductDefect {
   id: string
   productId: string
   productName: string
-  occurredAt: Timestamp
+  occurredAt: number
   reportedBy: string
   description: string
   photoUrls: string[]
-  createdAt: Timestamp
+  createdAt: number
 }
 
 export interface ProductDefectFormData {
@@ -72,8 +74,8 @@ export interface ProductNote {
   warnings: ProductWarning[]
   instructionSteps?: InstructionStep[]
   notes?: string
-  createdAt: Timestamp
-  updatedAt: Timestamp
+  createdAt: number
+  updatedAt: number
 }
 
 export type { InstructionStep }

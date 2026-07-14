@@ -3,7 +3,7 @@
 import { useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { Package, Plus, ArrowLeft } from 'lucide-react'
-import { useProducts } from '../../hooks/useProducts'
+import { useProductByProcessCode } from '../../hooks/useProducts'
 import LoadingSpinner from '../../components/ui/LoadingSpinner'
 
 /**
@@ -14,7 +14,6 @@ import LoadingSpinner from '../../components/ui/LoadingSpinner'
 export default function ProductCodeResolver() {
   const params = useParams<{ processCode: string }>()
   const router = useRouter()
-  const { products, loading } = useProducts()
 
   const processCode = (() => {
     const raw = params.processCode ?? ''
@@ -25,7 +24,7 @@ export default function ProductCodeResolver() {
     }
   })()
 
-  const matched = products.find((p) => p.processCodes?.includes(processCode))
+  const { product: matched, loading } = useProductByProcessCode(processCode)
 
   useEffect(() => {
     if (!loading && matched) {

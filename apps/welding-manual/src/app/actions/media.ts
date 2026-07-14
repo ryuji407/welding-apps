@@ -1,26 +1,15 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { unlink } from "node:fs/promises";
-import path from "node:path";
-import { prisma, getDataDir } from "@/lib/db";
+import { prisma } from "@/lib/db";
+import { unlinkUploadedFile } from "@/lib/uploads";
 
 export async function deleteMedia(mediaId: string, processCode: string) {
   const media = await prisma.mediaFile.findUnique({ where: { id: mediaId } });
   if (!media) return;
 
   await prisma.mediaFile.delete({ where: { id: mediaId } });
-
-  // /api/files/uploads/... 形式のURLからファイルパスを解決（?v=... クエリは除去）
-  if (media.url.startsWith("/api/files/")) {
-    const relative = media.url.split("?")[0].replace("/api/files/", "");
-    const filePath = path.join(getDataDir(), ...relative.split("/"));
-    try {
-      await unlink(filePath);
-    } catch {
-      // ファイルが既にない場合は無視
-    }
-  }
+  await unlinkUploadedFile(media.url);
 
   revalidatePath(`/manual/${processCode}`);
 }

@@ -38,6 +38,8 @@ export default function ManualForm({
   const [error, setError] = useState<string | null>(null);
   const [state, setState] = useState<ManualFormInitial>(initial);
   const [confirmAction, setConfirmAction] = useState<"end" | null>(null);
+  const [newAliasInput, setNewAliasInput] = useState<string>("");
+  const [aliasInputError, setAliasInputError] = useState<string | null>(null);
 
   useEffect(() => {
     const hash = window.location.hash.slice(1);
@@ -69,6 +71,35 @@ export default function ManualForm({
       else next.add(catId);
       return next;
     });
+  }
+
+  function addAlias() {
+    const code = newAliasInput.trim();
+    setAliasInputError(null);
+    if (!code) {
+      setAliasInputError("工程コードを入力してください");
+      return;
+    }
+    if (code === state.processCode) {
+      setAliasInputError("メイン工程コードと同じにはできません");
+      return;
+    }
+    if (state.aliases.includes(code)) {
+      setAliasInputError("既に追加されています");
+      return;
+    }
+    setState((s) => ({
+      ...s,
+      aliases: [...s.aliases, code],
+    }));
+    setNewAliasInput("");
+  }
+
+  function removeAlias(code: string) {
+    setState((s) => ({
+      ...s,
+      aliases: s.aliases.filter((a) => a !== code),
+    }));
   }
 
   function toggleEnvironment(env: Environment) {
@@ -138,6 +169,8 @@ export default function ManualForm({
     fd.append("file", file);
     fd.append("kind", "program");
     fd.append("processCode", state.processCode);
+    fd.append("environment", env);
+    fd.append("stepNumber", String(stepNumber));
     const res = await fetch("/api/upload", { method: "POST", body: fd });
     if (!res.ok) {
       const { error } = await res.json();
@@ -229,6 +262,8 @@ export default function ManualForm({
           toollessToolColor: state.toollessToolColor || null,
           workVideoUrl: state.workVideoUrl || null,
           layoutPhotoUrl: state.layoutPhotoUrl || null,
+          wagonPhotoUrl: state.wagonPhotoUrl || null,
+          notesPhotoUrl: state.notesPhotoUrl || null,
           environmentBlocks: state.environmentBlocks.filter((b) => state.robotEnvironments.includes(b.environment)).map((b) => ({
             environment: b.environment,
             stepPhotos: b.stepPhotos ?? {},
@@ -344,6 +379,69 @@ export default function ManualForm({
               </div>
             );
           })}
+        </div>
+      </Section>
+
+      <Section id="process-codes" title="工程コード">
+        <div className="space-y-3">
+          <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+            <p className="text-sm font-medium text-slate-700 mb-2">メイン工程コード</p>
+            <p className="text-lg font-semibold text-slate-900">{state.processCode}</p>
+          </div>
+          {state.aliases.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-slate-700">紐付けられた工程コード</p>
+              <div className="space-y-1">
+                {state.aliases.map((alias) => (
+                  <div key={alias} className="flex items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2">
+                    <span className="font-mono text-sm text-slate-700">{alias}</span>
+                    <button
+                      type="button"
+                      onClick={() => removeAlias(alias)}
+                      className="rounded px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
+                    >
+                      削除
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-slate-700">工程コードを追加</p>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={newAliasInput}
+                onChange={(e) => {
+                  setNewAliasInput(e.target.value);
+                  setAliasInputError(null);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addAlias();
+                  }
+                }}
+                placeholder="例: AC-001-B"
+                className={`flex-1 rounded-md border px-3 py-2 text-sm ${
+                  aliasInputError
+                    ? "border-red-400 bg-red-50"
+                    : "border-slate-300"
+                }`}
+              />
+              <button
+                type="button"
+                onClick={addAlias}
+                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+              >
+                追加
+              </button>
+            </div>
+            {aliasInputError && (
+              <p className="text-xs text-red-600">{aliasInputError}</p>
+            )}
+          </div>
         </div>
       </Section>
 

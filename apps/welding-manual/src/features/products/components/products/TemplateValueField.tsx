@@ -39,6 +39,7 @@ export default function TemplateValueField({
               src={value.videoUrl}
               controls
               playsInline
+              preload="metadata"
               className="max-w-full rounded-xl border border-slate-200"
               style={{ maxHeight: 240 }}
             />
@@ -48,6 +49,8 @@ export default function TemplateValueField({
                 <img
                   src={value.photoUrl}
                   alt={value.label}
+                  loading="lazy"
+                  decoding="async"
                   className="max-w-[240px] rounded-xl border border-slate-200 object-cover"
                 />
               </a>
@@ -68,6 +71,7 @@ export default function TemplateValueField({
               src={value.videoUrl}
               controls
               playsInline
+              preload="metadata"
               className="max-w-full rounded-xl border border-slate-200"
               style={{ maxHeight: 240 }}
             />

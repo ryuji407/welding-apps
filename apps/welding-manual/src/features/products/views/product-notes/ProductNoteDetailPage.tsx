@@ -195,7 +195,7 @@ export default function ProductNoteDetailPage() {
                   </div>
                   {step.photoUrl && (
                     <a href={step.photoUrl} target="_blank" rel="noopener noreferrer" className="block ml-9">
-                      <img src={step.photoUrl} alt={`手順${i + 1}`} className="w-full max-w-sm rounded-xl border border-slate-100 object-cover" />
+                      <img src={step.photoUrl} alt={`手順${i + 1}`} loading="lazy" decoding="async" className="w-full max-w-sm rounded-xl border border-slate-100 object-cover" />
                     </a>
                   )}
                   {i < steps.length - 1 && <div className="ml-9 mt-4 border-t border-slate-100" />}

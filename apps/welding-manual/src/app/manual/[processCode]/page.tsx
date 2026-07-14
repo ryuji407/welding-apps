@@ -290,9 +290,9 @@ export default async function ManualViewPage({
                             </div>
                             {/* フォームから保存された工程写真 */}
                             {stepPhotoUrl && (
-                              <a href={stepPhotoUrl} target="_blank" rel="noopener noreferrer" className="mb-2 inline-block">
+                              <a href={stepPhotoUrl} target="_blank" rel="noopener noreferrer" className="mb-2 block">
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img src={stepPhotoUrl} alt={`工程${stepNum}写真`} className="max-h-48 rounded-md border border-slate-200 object-contain" />
+                                <img src={stepPhotoUrl} alt={`工程${stepNum}写真`} className="w-full rounded-md border border-slate-200 object-contain" />
                               </a>
                             )}
                             {jigStep && (
@@ -343,9 +343,9 @@ export default async function ManualViewPage({
           <p className="text-slate-500">なし</p>
         )}
         {manual.notesPhotoUrl && (
-          <a href={manual.notesPhotoUrl} target="_blank" rel="noopener noreferrer" className="mt-2 inline-block">
+          <a href={manual.notesPhotoUrl} target="_blank" rel="noopener noreferrer" className="mt-2 block">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={manual.notesPhotoUrl} alt="注意点写真" className="max-h-64 rounded-md border border-slate-200 object-contain" />
+            <img src={manual.notesPhotoUrl} alt="注意点写真" className="w-full rounded-md border border-slate-200 object-contain" />
           </a>
         )}
       </ViewSection>

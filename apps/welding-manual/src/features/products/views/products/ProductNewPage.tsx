@@ -2,32 +2,57 @@
 
 import { useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { ArrowLeft } from 'lucide-react'
-import { useProducts } from '../../hooks/useProducts'
+import { ArrowLeft, LayoutTemplate, ChevronRight } from 'lucide-react'
+import { addProduct } from '../../hooks/useProducts'
+import { useTemplates } from '../../hooks/useTemplates'
+import TemplateApplySheet from '../../components/products/TemplateApplySheet'
+import type { TemplateFieldValue } from '../../types/product'
+import { generateId } from '../../utils/generateId'
 
 export default function ProductNewPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { addProduct } = useProducts()
+  const { templates } = useTemplates()
 
   const [name, setName] = useState('')
   // 工程表アプリからのリンク経由（/products/new?processCode=XXX）は自動セット
   const [processCode, setProcessCode] = useState(searchParams.get('processCode') ?? '')
   const [saving, setSaving] = useState(false)
+  const [showApplySheet, setShowApplySheet] = useState(false)
+  // 作り方テンプレート（未登録品はここから作り方を引き継いで作成する）
+  const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>([])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!name.trim()) return
     setSaving(true)
     try {
+      const appliedTemplateInstances = selectedTemplateIds.map((templateId) => ({
+        instanceId: generateId(),
+        templateId,
+      }))
+      const templateValues: TemplateFieldValue[] = appliedTemplateInstances.flatMap(
+        ({ instanceId, templateId }) => {
+          const tmpl = templates.find((t) => t.id === templateId)
+          if (!tmpl) return []
+          return tmpl.fields.map((field) => ({
+            templateId,
+            instanceId,
+            fieldId: field.id,
+            label: field.label,
+            type: field.type,
+          }))
+        }
+      )
       const id = await addProduct(
         {
           name: name.trim(),
           processCodes: processCode.trim() ? [processCode.trim()] : [],
           processingNotes: '',
           specifications: [],
-          appliedTemplateIds: [],
-          templateValues: [],
+          appliedTemplateIds: selectedTemplateIds,
+          appliedTemplateInstances,
+          templateValues,
         },
         []
       )
@@ -48,7 +73,7 @@ export default function ProductNewPage() {
           <span className="text-sm">戻る</span>
         </button>
         <h1 className="text-2xl font-bold text-white">製品を登録</h1>
-        <p className="text-emerald-300 text-sm mt-1">登録後にテンプレートを適用できます</p>
+        <p className="text-emerald-300 text-sm mt-1">作り方テンプレートを選んで登録できます</p>
       </div>
 
       <form onSubmit={handleSubmit} className="px-4 -mt-4 space-y-4 pb-8">
@@ -84,6 +109,28 @@ export default function ProductNewPage() {
         </div>
 
         <button
+          type="button"
+          onClick={() => setShowApplySheet(true)}
+          className="w-full bg-white rounded-2xl shadow-md p-4 flex items-center justify-between active:bg-slate-50"
+        >
+          <div className="flex items-center gap-2">
+            <LayoutTemplate size={16} className="text-emerald-600" />
+            <span className="text-sm font-semibold text-slate-700">作り方テンプレートを引き継ぐ</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-400">
+              {selectedTemplateIds.length === 0
+                ? '未選択'
+                : selectedTemplateIds
+                    .map((tid) => templates.find((t) => t.id === tid)?.name ?? '')
+                    .filter(Boolean)
+                    .join(', ')}
+            </span>
+            <ChevronRight size={15} className="text-slate-300" />
+          </div>
+        </button>
+
+        <button
           type="submit"
           disabled={saving || !name.trim()}
           className="w-full bg-emerald-500 text-white font-bold rounded-2xl py-4 shadow-md active:scale-95 transition-transform disabled:opacity-50 disabled:scale-100"
@@ -91,6 +138,15 @@ export default function ProductNewPage() {
           {saving ? '保存中...' : '登録する'}
         </button>
       </form>
+
+      {showApplySheet && (
+        <TemplateApplySheet
+          templates={templates}
+          appliedIds={selectedTemplateIds}
+          onApply={setSelectedTemplateIds}
+          onClose={() => setShowApplySheet(false)}
+        />
+      )}
     </div>
   )
 }
