@@ -31,38 +31,35 @@ export default async function HomePage({
               {q ? "該当するマニュアルがありません" : "まだマニュアルがありません"}
             </p>
           ) : (
-            <div className="overflow-hidden rounded-md border border-slate-200 bg-white">
-              <table className="w-full text-sm">
-                <thead className="bg-slate-50 text-left text-slate-600">
-                  <tr>
-                    <th className="px-4 py-2">工程コード</th>
-                    <th className="px-4 py-2">製品名</th>
-                    <th className="px-4 py-2">更新日時</th>
-                    <th className="px-4 py-2"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {manuals.map((m) => (
-                    <tr key={m.id} className="relative border-t border-slate-200 hover:bg-slate-50">
-                      <td className="px-4 py-2 font-medium">
-                        <Link
-                          href={`/manual/${encodeURIComponent(m.processCode)}`}
-                          className="after:absolute after:inset-0"
-                        >
-                          {m.processCode}
-                        </Link>
-                      </td>
-                      <td className="px-4 py-2">{m.productName ?? "—"}</td>
-                      <td className="px-4 py-2 text-slate-500">
-                        {m.updatedAt.toLocaleString("ja-JP")}
-                      </td>
-                      <td className="px-4 py-2 text-right">
-                        <DeleteButtonRow processCode={m.processCode} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="overflow-hidden rounded-md border border-slate-200 bg-white text-sm">
+              <div className="flex items-center bg-slate-50 text-left text-slate-600">
+                <div className="w-32 shrink-0 px-4 py-2">工程コード</div>
+                <div className="min-w-0 flex-1 px-4 py-2">製品名</div>
+                <div className="w-48 shrink-0 px-4 py-2">更新日時</div>
+                <div className="w-16 shrink-0 px-4 py-2"></div>
+              </div>
+              {manuals.map((m) => (
+                <div
+                  key={m.id}
+                  className="relative flex items-center border-t border-slate-200 hover:bg-slate-50"
+                >
+                  <div className="w-32 shrink-0 truncate px-4 py-2 font-medium">
+                    <Link
+                      href={`/manual/${encodeURIComponent(m.processCode)}`}
+                      className="absolute inset-0"
+                      aria-label={m.processCode}
+                    />
+                    {m.processCode}
+                  </div>
+                  <div className="min-w-0 flex-1 truncate px-4 py-2">{m.productName ?? "—"}</div>
+                  <div className="w-48 shrink-0 px-4 py-2 text-slate-500">
+                    {m.updatedAt.toLocaleString("ja-JP")}
+                  </div>
+                  <div className="w-16 shrink-0 px-4 py-2 text-right">
+                    <DeleteButtonRow processCode={m.processCode} />
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
