@@ -11,12 +11,15 @@ type MasterRow = {
   cycleTime: number | null;
   workerCount: number | null;
   obsolete: string | null;
+  registered?: boolean;
+  workName?: string | null;
 };
 
 type Filters = {
   itemName: string;
   processName: string;
   processCode: string;
+  workName: string;
   shop: string;
 };
 
@@ -25,9 +28,19 @@ const PRIORITY_SHOPS = ["S1", "S2", "S3", "S4", "S6", "S7", "塗装", "組立"];
 export default function MasterPicker({
   initialSelected = [],
   initialFilter,
+  basePath = "/manual/new",
+  proceedLabel = "選択した工程でマニュアル作成",
+  mode = "manual",
+  autoSelectSearchCode,
 }: {
   initialSelected?: string[];
   initialFilter?: Partial<Filters>;
+  basePath?: string;
+  proceedLabel?: string;
+  mode?: "manual" | "product";
+  // 色違いなど色品番バリエーションを自動選択するための検索用工程コード（工程表アプリからの遷移時）。
+  // 工程絞り込みの表示フィルターとは独立して背後で検索するため、フィルター欄は空のままにできる。
+  autoSelectSearchCode?: string;
 } = {}) {
   const [shops, setShops] = useState<string[]>([]);
   const [available, setAvailable] = useState<boolean | null>(null);
@@ -36,6 +49,7 @@ export default function MasterPicker({
     itemName: "",
     processName: "",
     processCode: "",
+    workName: "",
     shop: "S4",
     ...initialFilter,
   });
@@ -46,23 +60,43 @@ export default function MasterPicker({
   const [selected, setSelected] = useState<string[]>(initialSelected);
   const didAutoSelect = useRef(false);
 
+  // 工程表アプリからの遷移時：表示中のフィルター欄とは別に、色違いバリエーションを裏で検索して自動選択する
   useEffect(() => {
-    if (didAutoSelect.current || initialSelected.length !== 1 || rows.length === 0) return;
+    if (didAutoSelect.current || !autoSelectSearchCode) return;
     didAutoSelect.current = true;
-    const code = initialSelected[0];
+    const code = initialSelected[0] ?? autoSelectSearchCode;
     const parts = code.split("-");
-    if (parts.length >= 3 && parts[1].length === 3) {
-      const prefix = parts[0];
-      const suffix = parts.slice(2).join("-");
-      const variants = rows
-        .filter((r) => {
-          const p = r.processCode.split("-");
-          return p.length >= 3 && p[1].length === 3 && p[0] === prefix && p.slice(2).join("-") === suffix;
-        })
-        .map((r) => r.processCode);
-      if (variants.length > 0) setSelected(variants);
-    }
-  }, [rows]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const params = new URLSearchParams();
+    params.set("processCode", autoSelectSearchCode);
+    params.set("mode", mode);
+
+    fetch(`/api/master/search?${params.toString()}`)
+      .then((r) => r.json())
+      .then((data) => {
+        const candidateRows: MasterRow[] = data.rows ?? [];
+        if (parts.length >= 3 && parts[1].length === 3) {
+          const prefix = parts[0];
+          const suffix = parts.slice(2).join("-");
+          const variants = candidateRows
+            .filter((r) => {
+              if (r.registered) return false;
+              const p = r.processCode.split("-");
+              return p.length >= 3 && p[1].length === 3 && p[0] === prefix && p.slice(2).join("-") === suffix;
+            })
+            .map((r) => r.processCode);
+          if (variants.length > 0) setSelected(variants);
+        }
+      })
+      .catch(() => {});
+  }, [autoSelectSearchCode, mode]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 登録済みと判明した工程コードは選択状態から除外する（初期選択に含まれていた場合も含む）
+  useEffect(() => {
+    const registeredCodes = new Set(rows.filter((r) => r.registered).map((r) => r.processCode));
+    if (registeredCodes.size === 0) return;
+    setSelected((prev) => prev.filter((c) => !registeredCodes.has(c)));
+  }, [rows]);
 
   useEffect(() => {
     fetch("/api/master/shops")
@@ -89,6 +123,7 @@ export default function MasterPicker({
       if (v.trim()) params.set(k, v.trim());
     }
     if (excludeObsolete) params.set("excludeObsolete", "1");
+    params.set("mode", mode);
 
     let cancelled = false;
     setLoading(true);
@@ -110,7 +145,7 @@ export default function MasterPicker({
       cancelled = true;
       clearTimeout(t);
     };
-  }, [filters, excludeObsolete, hasAnyFilter]);
+  }, [filters, excludeObsolete, hasAnyFilter, mode]);
 
   function update(key: keyof Filters, v: string) {
     setFilters((f) => ({ ...f, [key]: v }));
@@ -123,6 +158,7 @@ export default function MasterPicker({
       const suffix = parts.slice(2).join("-");
       return rows
         .filter((r) => {
+          if (r.registered) return false;
           const p = r.processCode.split("-");
           return (
             p.length >= 3 &&
@@ -137,6 +173,8 @@ export default function MasterPicker({
   }
 
   function toggleRow(code: string) {
+    const row = rows.find((r) => r.processCode === code);
+    if (row?.registered) return; // 登録済みは選択不可（表示のみ）
     const variants = colorVariants(code);
     setSelected((prev) => {
       const isSelected = prev.includes(code);
@@ -150,8 +188,8 @@ export default function MasterPicker({
     if (selected.length === 0) return null;
     const [primary, ...rest] = selected;
     return rest.length > 0
-      ? `/manual/new?processCode=${encodeURIComponent(primary)}&aliases=${encodeURIComponent(rest.join(","))}`
-      : `/manual/new?processCode=${encodeURIComponent(primary)}`;
+      ? `${basePath}?processCode=${encodeURIComponent(primary)}&aliases=${encodeURIComponent(rest.join(","))}`
+      : `${basePath}?processCode=${encodeURIComponent(primary)}`;
   })();
 
   const priorityShops = PRIORITY_SHOPS.filter((s) => shops.includes(s));
@@ -175,11 +213,11 @@ export default function MasterPicker({
     <div className="space-y-4">
       <div className="rounded-md border border-slate-200 bg-white p-4">
         <h2 className="mb-3 font-bold">工程絞り込み</h2>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-          {(["itemName", "processName", "processCode"] as const).map((key) => (
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+          {(["itemName", "processName", "processCode", "workName"] as const).map((key) => (
             <FilterInput
               key={key}
-              label={{ itemName: "品目名称", processName: "工程名称", processCode: "工程コード" }[key]}
+              label={{ itemName: "品目名称", processName: "工程名称", processCode: "工程コード", workName: "作業名" }[key]}
               value={filters[key]}
               onChange={(v) => update(key, v)}
             />
@@ -256,6 +294,7 @@ export default function MasterPicker({
                   <th className="px-3 py-2">品目名称</th>
                   <th className="px-3 py-2">工程コード</th>
                   <th className="px-3 py-2">工程名称</th>
+                  <th className="px-3 py-2">作業名</th>
                   <th className="px-3 py-2">SHOP</th>
                   <th className="px-3 py-2 text-right">CT(秒)</th>
                 </tr>
@@ -263,25 +302,37 @@ export default function MasterPicker({
               <tbody>
                 {rows.map((r, i) => {
                   const isSelected = selected.includes(r.processCode);
+                  const isRegistered = !!r.registered;
                   return (
                     <tr
                       key={`${r.processCode}-${i}`}
                       onClick={() => toggleRow(r.processCode)}
-                      className={`cursor-pointer border-t border-slate-200 ${isSelected ? "bg-blue-50" : "hover:bg-slate-50"}`}
+                      className={`border-t border-slate-200 ${
+                        isRegistered
+                          ? "cursor-not-allowed bg-slate-50 text-slate-400"
+                          : `cursor-pointer ${isSelected ? "bg-blue-50" : "hover:bg-slate-50"}`
+                      }`}
                     >
                       <td className="px-3 py-2">
                         <input
                           type="checkbox"
                           checked={isSelected}
+                          disabled={isRegistered}
                           onChange={() => toggleRow(r.processCode)}
                           onClick={(e) => e.stopPropagation()}
                         />
                       </td>
                       <td className="px-3 py-2">{r.itemName}</td>
-                      <td className="px-3 py-2 font-mono text-xs font-medium text-blue-700">
+                      <td className={`px-3 py-2 font-mono text-xs font-medium ${isRegistered ? "text-slate-400" : "text-blue-700"}`}>
                         {r.processCode}
+                        {isRegistered && (
+                          <span className="ml-2 rounded bg-slate-200 px-1.5 py-0.5 font-sans text-[10px] font-normal text-slate-500">
+                            登録済み
+                          </span>
+                        )}
                       </td>
                       <td className="px-3 py-2">{r.processName}</td>
+                      <td className="px-3 py-2">{r.workName ?? "—"}</td>
                       <td className="px-3 py-2">{r.shop ?? "—"}</td>
                       <td className="px-3 py-2 text-right">{r.cycleTime ?? "—"}</td>
                     </tr>
@@ -311,7 +362,7 @@ export default function MasterPicker({
               href={proceedHref}
               className="rounded-md bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
             >
-              選択した工程でマニュアル作成
+              {proceedLabel}
             </Link>
           </div>
         </div>

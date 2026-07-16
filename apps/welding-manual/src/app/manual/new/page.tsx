@@ -3,6 +3,7 @@ import ManualForm from "@/components/ManualForm";
 import MasterPicker from "@/components/MasterPicker";
 import { emptyInitial } from "@/lib/constants";
 import { findByProcessCode } from "@/lib/master";
+import { getManualByCode } from "@/lib/manual";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +31,8 @@ export default async function NewManualPage({
     return (
       <MasterPicker
         initialSelected={preselect ? [preselect] : []}
-        initialFilter={preselectSearchCode ? { processCode: preselectSearchCode, shop: "" } : undefined}
+        initialFilter={preselect ? { shop: "" } : undefined}
+        autoSelectSearchCode={preselectSearchCode}
       />
     );
   }
@@ -56,13 +58,23 @@ export default async function NewManualPage({
   const notFoundCodes = allCodes.filter(({ master: m }) => !m).map(({ code }) => code);
   const foundMasters = allCodes.flatMap(({ master: m }) => (m ? [m] : []));
 
+  // 既存マニュアルがあれば productName を取得（同じ工程コードで既存マニュアルがある場合）
+  const existingManuals: Record<string, { productName: string }> = {};
+  const existingManualKeys = [processCode, ...aliases].filter(Boolean) as string[];
+  for (const code of existingManualKeys) {
+    const manual = await getManualByCode(code);
+    if (manual && manual.productName) {
+      existingManuals[code] = { productName: manual.productName };
+    }
+  }
+
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">マニュアル新規作成</h1>
 
       <div className="space-y-2">
         <h2 className="text-lg font-bold">基本情報</h2>
-        {foundMasters.length > 0 && <MasterTable masters={foundMasters} currentCodes={[processCode, ...aliases]} />}
+        {foundMasters.length > 0 && <MasterTable masters={foundMasters} currentCodes={[processCode, ...aliases]} existingManuals={existingManuals} />}
         {notFoundCodes.map((code) => (
           <div key={code} className="rounded-md border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
             <p className="font-bold">
@@ -88,9 +100,11 @@ export default async function NewManualPage({
 function MasterTable({
   masters,
   currentCodes,
+  existingManuals = {},
 }: {
   masters: NonNullable<ReturnType<typeof findByProcessCode>>[];
   currentCodes: string[];
+  existingManuals?: Record<string, { productName: string }>;
 }) {
   const addToHref = `/manual/new?addTo=${encodeURIComponent(currentCodes.join(","))}`;
   return (
@@ -106,6 +120,7 @@ function MasterTable({
             <th className="px-3 py-2">工程コード</th>
             <th className="px-3 py-2">品目名称</th>
             <th className="px-3 py-2">工程名称</th>
+            <th className="px-3 py-2">作業名</th>
             <th className="px-3 py-2">SHOP</th>
             <th className="px-3 py-2 text-right">CT(秒)</th>
             <th className="px-3 py-2 text-right">人数</th>
@@ -118,6 +133,7 @@ function MasterTable({
               <td className="px-3 py-2 font-mono text-xs font-medium text-blue-700">{m.processCode}</td>
               <td className="px-3 py-2">{m.itemName}</td>
               <td className="px-3 py-2">{m.processName}</td>
+              <td className="px-3 py-2">{existingManuals[m.processCode]?.productName ?? "—"}</td>
               <td className="px-3 py-2">{m.shop ?? "—"}</td>
               <td className="px-3 py-2 text-right">{m.cycleTime ?? "—"}</td>
               <td className="px-3 py-2 text-right">{m.workerCount ?? "—"}</td>

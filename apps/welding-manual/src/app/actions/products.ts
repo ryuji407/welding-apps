@@ -84,6 +84,21 @@ export async function getProductAction(id: string): Promise<Product | null> {
   return row && row.isActive !== false ? toProduct(row) : null;
 }
 
+// 新規作成画面で「登録済み」表示・作業名検索のための工程コード→製品名 マップ（有効な製品のみ）
+export async function getProductNameMapAction(): Promise<Record<string, string>> {
+  const rows = await prisma.product.findMany({
+    where: { isActive: true },
+    select: { name: true, processCodes: true },
+  });
+  const map: Record<string, string> = {};
+  for (const r of rows) {
+    for (const code of parse<string[]>(r.processCodes, [])) {
+      map[code] = r.name;
+    }
+  }
+  return map;
+}
+
 export async function getProductByProcessCodeAction(processCode: string): Promise<Product | null> {
   if (!processCode) return null;
   // processCodes は JSON 文字列。まず contains で候補を絞り JS で厳密一致を確認。

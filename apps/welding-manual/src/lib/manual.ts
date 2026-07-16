@@ -34,6 +34,27 @@ export type ManualWithRelations = NonNullable<
   Awaited<ReturnType<typeof getManualByCode>>
 >;
 
+// 新規作成画面で「登録済み」表示・作業名検索のための工程コード一覧＋作業名(productName)マップ（本体 + エイリアス）
+export async function getManualRegistryInfo(): Promise<{
+  registeredCodes: string[];
+  nameMap: Record<string, string>;
+}> {
+  const manuals = await prisma.manual.findMany({
+    select: { processCode: true, productName: true, aliases: { select: { processCode: true } } },
+  });
+  const registeredCodes: string[] = [];
+  const nameMap: Record<string, string> = {};
+  for (const m of manuals) {
+    registeredCodes.push(m.processCode);
+    for (const a of m.aliases) registeredCodes.push(a.processCode);
+    if (m.productName) {
+      nameMap[m.processCode] = m.productName;
+      for (const a of m.aliases) nameMap[a.processCode] = m.productName;
+    }
+  }
+  return { registeredCodes, nameMap };
+}
+
 export async function listManuals(search?: string) {
   return prisma.manual.findMany({
     where: search

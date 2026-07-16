@@ -57,7 +57,7 @@ export default function ProductCodeResolver() {
             新規登録するか、既存の製品にこの工程コードを紐付けてください
           </p>
           <button
-            onClick={() => router.push(`/products/new?processCode=${encodeURIComponent(processCode)}`)}
+            onClick={() => router.push(`/products/new?preselect=${encodeURIComponent(processCode)}`)}
             className="flex items-center gap-2 bg-emerald-500 text-white font-bold rounded-2xl px-6 py-3.5 shadow-md active:scale-95 transition-transform"
           >
             <Plus size={18} />
